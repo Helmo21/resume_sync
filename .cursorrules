@@ -1,0 +1,306 @@
+# ResumeSync - AI Agent Rules
+
+This file provides rules and context for AI coding assistants (Cursor, Windsurf, Cline, etc.) working in this codebase.
+
+## Project Context
+
+ResumeSync is an AI-powered resume generator that:
+1. Integrates with LinkedIn via OAuth (scrapes profile ONCE at login)
+2. Scrapes job postings from URLs
+3. Uses OpenRouter AI models to generate tailored resumes
+4. Exports resumes as PDF/DOCX with multiple templates
+5. Stores everything in PostgreSQL for resume history
+
+**Architecture**: Monolithic FastAPI backend + React frontend + PostgreSQL + Redis, all containerized with Docker Compose.
+
+## Code Style & Conventions
+
+### Python (Backend)
+- Use **Python 3.10+** features
+- Follow **PEP 8** style guide
+- Use **type hints** for all function signatures
+- Use **async/await** for database operations (SQLAlchemy async)
+- **Exception handling**: Always catch specific exceptions, log errors
+- **Import order**: stdlib → third-party → local (separated by blank lines)
+
+### JavaScript/React (Frontend)
+- Use **functional components** with hooks (no class components)
+- Use **arrow functions** for components
+- **PropTypes**: Not used, rely on good naming conventions
+- **File naming**: PascalCase for components (e.g., `LoginPage.jsx`)
+- **useState/useEffect**: Keep logic close to where it's used
+- **API calls**: Always in `services/api.js`, never directly in components
+
+### File Extensions
+- React components with JSX: **`.jsx`** (not `.js`)
+- React hooks: **`.jsx`** if they return JSX, `.js` if pure logic
+- Backend Python: **`.py`**
+
+## Critical Rules
+
+### 🚫 Never Do This
+1. **Never use direct OpenAI API** - We use OpenRouter (check `openai_generator.py`)
+2. **Never scrape LinkedIn on every resume generation** - Profile is stored in DB after OAuth
+3. **Never hardcode API keys** - Always use environment variables from `.env`
+4. **Never commit `.env` files** - They're in `.gitignore`
+5. **Never use `docker-compose` (v1)** - Use `docker compose` (v2)
+6. **Never create class-based React components** - Use functional components only
+7. **Never skip database migrations** - Use Alembic for schema changes
+
+### ✅ Always Do This
+1. **Use Docker Compose** for all development (`docker compose up`)
+2. **Check logs** before assuming something works (`docker compose logs [service]`)
+3. **Run migrations** after model changes (`docker compose exec backend alembic upgrade head`)
+4. **Use JWT authentication** for protected endpoints (check `Authorization` header)
+5. **Store LinkedIn tokens encrypted** in production (TODO: currently plaintext)
+6. **Return structured JSON** from all API endpoints
+7. **Handle errors gracefully** with proper HTTP status codes
+
+## Common Patterns
+
+### Adding a New API Endpoint
+
+**Backend** (`backend/app/api/[module].py`):
+```python
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from ..core.database import get_db
+from ..models.user import User
+
+router = APIRouter()
+
+@router.get("/endpoint")
+async def get_data(
+    user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint description.
+
+    Returns:
+        dict: Response structure
+    """
+    try:
+        # Logic here
+        return {"data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+**Register in** `backend/app/main.py`:
+```python
+from .api import new_module
+app.include_router(new_module.router, prefix="/api/new", tags=["New"])
+```
+
+**Frontend** (`frontend/src/services/api.js`):
+```javascript
+export const newModule = {
+  getData: () => api.get('/new/endpoint'),
+}
+```
+
+### Database Migration Workflow
+
+```bash
+# 1. Modify models in backend/app/models/
+# 2. Generate migration
+docker compose exec backend alembic revision --autogenerate -m "add field"
+
+# 3. Review generated file in backend/alembic/versions/
+# 4. Apply migration
+docker compose exec backend alembic upgrade head
+
+# 5. Commit both model change and migration file
+```
+
+### Resume Generation Flow
+
+**Never break this flow**:
+```
+1. User authenticated via JWT
+2. Get LinkedIn profile from DB (NOT from LinkedIn API)
+3. Scrape job posting from URL
+4. Send both to OpenRouter API
+5. Generate resume JSON
+6. Create PDF with selected template
+7. Save to database
+8. Return download URL
+```
+
+## AI Model Configuration
+
+**We use OpenRouter, not OpenAI**:
+- Base URL: `https://openrouter.ai/api/v1`
+- API Key: `OPENROUTER_API_KEY` env var
+- Model selection: `OPENROUTER_MODEL` env var (default: `anthropic/claude-3.5-sonnet`)
+- See `OPENROUTER_MODELS.md` for model options
+
+### Changing Models
+```bash
+# In backend/.env
+OPENROUTER_MODEL=openai/gpt-4o-mini  # Cheapest option ($0.001/resume)
+# OR
+OPENROUTER_MODEL=anthropic/claude-3.5-sonnet  # Best quality ($0.02/resume)
+```
+
+## Environment Variables
+
+### Required in `backend/.env`
+```bash
+# Authentication
+LINKEDIN_CLIENT_ID=your_client_id
+LINKEDIN_CLIENT_SECRET=your_secret
+LINKEDIN_REDIRECT_URI=http://localhost:8000/api/auth/linkedin/callback
+SECRET_KEY=your_jwt_secret
+
+# AI Model
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+
+# Database (auto-configured in Docker)
+DATABASE_URL=postgresql://resumesync:resumesync@db:5432/resumesync
+```
+
+## Testing
+
+### Manual Testing Workflow
+```bash
+# 1. Start services
+docker compose up -d
+
+# 2. Check health
+curl http://localhost:8000/health  # Should return {"status":"healthy"}
+
+# 3. Open frontend
+open http://localhost:5173
+
+# 4. Test flow:
+#    - Click "Sign in with LinkedIn"
+#    - Authorize (requires LinkedIn app)
+#    - Should redirect to dashboard
+#    - Click "Generate Resume"
+#    - Paste job URL
+#    - Select template
+#    - Generate → should download PDF
+```
+
+### Debugging Checklist
+```bash
+# Backend not responding?
+docker compose logs backend
+
+# Frontend blank page?
+docker compose logs frontend
+# Check browser console (F12)
+
+# Database connection error?
+docker compose ps  # Check if db is healthy
+docker compose exec db psql -U resumesync -d resumesync
+
+# OpenRouter API error?
+# Check https://openrouter.ai/activity
+# Verify OPENROUTER_API_KEY in backend/.env
+```
+
+## File Structure Reference
+
+```
+ResumeSync/
+├── backend/              # FastAPI backend
+│   ├── app/
+│   │   ├── api/         # Route handlers (auth, profile, resumes)
+│   │   ├── core/        # Config, database, security
+│   │   ├── models/      # SQLAlchemy ORM models
+│   │   └── main.py      # FastAPI app entry
+│   ├── alembic/         # Database migrations
+│   ├── Dockerfile
+│   └── .env             # Environment variables (NOT in git)
+├── frontend/            # React frontend
+│   ├── src/
+│   │   ├── pages/      # Page components (.jsx)
+│   │   ├── services/   # API client (api.js)
+│   │   ├── hooks/      # React hooks (useAuth.jsx)
+│   │   └── main.jsx    # React entry
+│   └── package.json
+├── docker-compose.yml   # Service orchestration
+├── *.py                 # Legacy MVP scripts (mounted to /app/legacy/)
+└── *.md                 # Documentation
+```
+
+## Performance Considerations
+
+1. **LinkedIn API Rate Limits**: Profile scraped once, stored in DB
+2. **OpenRouter Rate Limits**: Check dashboard, add retry logic if needed
+3. **Database Queries**: Use indexes on frequently queried columns
+4. **PDF Generation**: Heavy operation, consider background jobs for production
+5. **Frontend Bundle Size**: Keep dependencies minimal, use code splitting
+
+## Security Considerations
+
+1. **JWT Tokens**: 7-day expiry (configurable in `ACCESS_TOKEN_EXPIRE_MINUTES`)
+2. **LinkedIn Tokens**: Store encrypted in production (TODO: currently plaintext)
+3. **CORS**: Only allow `FRONTEND_URL` in production
+4. **SQL Injection**: Use SQLAlchemy ORM, never raw SQL
+5. **XSS**: React escapes by default, be careful with `dangerouslySetInnerHTML`
+
+## Deployment Notes
+
+**Current**: Local development with Docker Compose
+**Future**: AWS ECS (backend) + S3+CloudFront (frontend)
+
+When deploying:
+- Set `ENVIRONMENT=production` in `.env`
+- Use proper `SECRET_KEY` (generate with `openssl rand -hex 32`)
+- Enable HTTPS
+- Use managed database (RDS)
+- Store PDFs in S3 (not local filesystem)
+
+## Known Issues & Workarounds
+
+1. **LinkedIn OAuth**: Requires real LinkedIn app credentials (get from https://www.linkedin.com/developers/)
+2. **Job Scraping**: Some sites block bots - provide manual paste fallback
+3. **Docker Volumes**: If node_modules issues, rebuild: `docker compose up --build -d`
+4. **Port Conflicts**: If ports 8000/5173/5432 in use, change in docker-compose.yml
+
+## Quick Reference Commands
+
+```bash
+# Start everything
+./START.sh  # OR docker compose up -d
+
+# View logs
+docker compose logs -f [backend|frontend|db|redis]
+
+# Restart service
+docker compose restart [service]
+
+# Run migrations
+docker compose exec backend alembic upgrade head
+
+# Access database
+docker compose exec db psql -U resumesync -d resumesync
+
+# Stop everything
+docker compose down
+
+# Reset everything (including data)
+docker compose down -v && docker compose up -d
+```
+
+## Documentation
+
+- **CLAUDE.md** - Codebase overview for AI assistants
+- **DEPLOYMENT_GUIDE.md** - Setup and deployment instructions
+- **QUICK_START.md** - User-facing quick start
+- **OPENROUTER_MODELS.md** - AI model options and pricing
+- **ROADMAP.txt** - Complete product roadmap
+- **TASK-MANAGER.md** - Task tracking and bugs
+
+## Support
+
+For questions:
+1. Check logs: `docker compose logs [service]`
+2. Check API docs: http://localhost:8000/docs
+3. Check browser console (F12) for frontend issues
+4. Review relevant `.md` file for specific topic

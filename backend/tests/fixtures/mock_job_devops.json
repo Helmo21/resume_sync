@@ -1,0 +1,27 @@
+{
+  "title": "Senior DevOps Engineer",
+  "company": "Metyis",
+  "location": "Paris, France",
+  "seniority_level": "Senior",
+  "employment_type": "Full-time",
+  "job_url": "https://www.linkedin.com/jobs/view/4256544321",
+  "description": "We are looking for a Senior DevOps Engineer to join our growing team in Paris.\n\n**About the role:**\nAs a Senior DevOps Engineer, you will be responsible for designing, implementing, and maintaining our cloud infrastructure and CI/CD pipelines. You will work closely with development teams to ensure smooth deployments and high availability of our services.\n\n**Required Skills:**\n- 4+ years of experience in DevOps or Site Reliability Engineering\n- Strong expertise in AWS (EC2, S3, Lambda, RDS, CloudFormation)\n- Proficiency with containerization (Docker, Kubernetes)\n- Experience with CI/CD tools (Jenkins, GitLab CI, Azure DevOps, GitHub Actions)\n- Infrastructure as Code experience (Terraform, Ansible, CloudFormation)\n- Scripting skills (Python, Bash, PowerShell)\n- GitOps practices and tools (ArgoCD, Flux)\n- DevSecOps mindset and security best practices\n\n**Preferred Skills:**\n- Experience with monitoring tools (Prometheus, Grafana, ELK Stack, Datadog)\n- Knowledge of service mesh (Istio, Linkerd)\n- Experience with multi-cloud environments (AWS, Azure, GCP)\n- Certified Kubernetes Administrator (CKA) or similar certifications\n- Strong understanding of networking and security\n\n**Responsibilities:**\n- Design and implement scalable CI/CD pipelines\n- Manage and optimize cloud infrastructure on AWS\n- Automate infrastructure provisioning and configuration management\n- Implement monitoring, logging, and alerting solutions\n- Ensure high availability and disaster recovery\n- Collaborate with development teams on deployment strategies\n- Champion DevSecOps practices and security automation\n- Mentor junior team members\n\n**What we offer:**\n- Competitive salary and benefits\n- Remote-friendly environment\n- Learning and development budget\n- Modern tech stack\n- Agile team culture",
+  "skills_mentioned": [
+    "AWS",
+    "Docker",
+    "Kubernetes",
+    "Jenkins",
+    "GitLab CI",
+    "Terraform",
+    "Ansible",
+    "Python",
+    "Bash",
+    "GitOps",
+    "DevSecOps",
+    "Prometheus",
+    "Grafana",
+    "CI/CD",
+    "Infrastructure as Code",
+    "SRE"
+  ]
+}

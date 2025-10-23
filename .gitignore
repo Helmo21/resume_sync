@@ -1,0 +1,79 @@
+# ResumeSync .gitignore
+
+# Environment variables (contains API keys!)
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Generated files
+*.pdf
+*.docx
+*.json
+!package*.json
+!tsconfig*.json
+!**/fixtures/*.json
+linkedin_profile.json
+generated_resume.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+*.cover
+.hypothesis/
+
+# Distribution
+build/
+dist/
+*.egg-info/
+
+# Docker volumes (if using local mounts)
+postgres-data/
+redis-data/
+
+# Temporary files
+*.bak
+*.tmp
+*~
+
+# Generated resumes (production)
+uploads/
+downloads/
+output/

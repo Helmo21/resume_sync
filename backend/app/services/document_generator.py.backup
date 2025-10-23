@@ -1,0 +1,620 @@
+"""
+Document Generation Service for Resumes
+
+Generates PDF and DOCX files from CV data using ATS-friendly templates.
+Supports both custom generation and using pre-made DOCX templates.
+"""
+
+from typing import Dict, List, Optional
+from datetime import datetime
+import os
+import re
+from pathlib import Path
+
+# PDF generation
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+
+# DOCX generation
+from docx import Document
+from docx.shared import Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+
+
+class ATSTemplateGenerator:
+    """
+    Generates ATS-friendly resumes in PDF and DOCX formats.
+    ATS (Applicant Tracking Systems) require simple, clean formatting.
+
+    Supports both custom generation and using pre-made DOCX templates.
+    """
+
+    def __init__(self, templates_dir: Optional[str] = None):
+        """
+        Initialize template generator.
+
+        Args:
+            templates_dir: Path to directory containing DOCX templates
+        """
+        self.templates = {
+            "modern": self._modern_template,
+            "classic": self._classic_template,
+            "technical": self._technical_template
+        }
+
+        # Default templates directory
+        self.templates_dir = templates_dir or "/home/antoine/Documents/dev/ResumeSync/teamplate"
+
+        # Available DOCX templates
+        self.docx_templates = {
+            "accounting": "ATS Bold accounting resume.docx",
+            "office_manager": "ATS office manager resume.docx",
+            "attorney": "Attorney resume.docx",
+            "sales": "Modern bold sales resume.docx"
+        }
+
+    def generate_pdf(
+        self,
+        resume_data: Dict,
+        output_path: str,
+        template: str = "modern"
+    ) -> str:
+        """
+        Generate PDF resume.
+
+        Args:
+            resume_data: Structured resume data from CV generator
+            output_path: Path to save PDF file
+            template: Template name (modern, classic, technical)
+
+        Returns:
+            str: Path to generated PDF
+        """
+        template_func = self.templates.get(template, self._modern_template)
+        return template_func(resume_data, output_path, format="pdf")
+
+    def generate_docx(
+        self,
+        resume_data: Dict,
+        output_path: str,
+        template: str = "modern",
+        use_template_file: bool = False
+    ) -> str:
+        """
+        Generate DOCX resume.
+
+        Args:
+            resume_data: Structured resume data from CV generator
+            output_path: Path to save DOCX file
+            template: Template name (modern, classic, technical) or template key (accounting, sales, etc.)
+            use_template_file: If True, use pre-made DOCX template file
+
+        Returns:
+            str: Path to generated DOCX
+        """
+        if use_template_file:
+            # Use pre-made DOCX template
+            return self._generate_from_docx_template(resume_data, output_path, template)
+        else:
+            # Generate from scratch
+            template_func = self.templates.get(template, self._modern_template)
+            return template_func(resume_data, output_path, format="docx")
+
+    def _modern_template(self, resume_data: Dict, output_path: str, format: str = "pdf") -> str:
+        """Modern ATS-friendly template"""
+        if format == "pdf":
+            return self._generate_modern_pdf(resume_data, output_path)
+        else:
+            return self._generate_modern_docx(resume_data, output_path)
+
+    def _classic_template(self, resume_data: Dict, output_path: str, format: str = "pdf") -> str:
+        """Classic ATS-friendly template"""
+        if format == "pdf":
+            return self._generate_classic_pdf(resume_data, output_path)
+        else:
+            return self._generate_classic_docx(resume_data, output_path)
+
+    def _technical_template(self, resume_data: Dict, output_path: str, format: str = "pdf") -> str:
+        """Technical ATS-friendly template"""
+        if format == "pdf":
+            return self._generate_technical_pdf(resume_data, output_path)
+        else:
+            return self._generate_technical_docx(resume_data, output_path)
+
+    def _generate_modern_pdf(self, resume_data: Dict, output_path: str) -> str:
+        """Generate modern professional PDF matching high-quality reference design"""
+        doc = SimpleDocTemplate(output_path, pagesize=letter,
+                                rightMargin=0.6*inch, leftMargin=0.6*inch,
+                                topMargin=0.6*inch, bottomMargin=0.6*inch)
+
+        story = []
+        styles = getSampleStyleSheet()
+
+        # Custom styles - Professional & Modern
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=28,
+            textColor=colors.HexColor('#1a1a1a'),
+            spaceAfter=4,
+            alignment=TA_LEFT,
+            fontName='Helvetica-Bold',
+            leading=32
+        )
+
+        subtitle_style = ParagraphStyle(
+            'SubtitleStyle',
+            parent=styles['Normal'],
+            fontSize=13,
+            textColor=colors.HexColor('#555555'),
+            spaceAfter=12,
+            alignment=TA_LEFT,
+            fontName='Helvetica-Oblique',
+            leading=16
+        )
+
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=11,
+            textColor=colors.HexColor('#1a1a1a'),
+            spaceAfter=8,
+            spaceBefore=14,
+            fontName='Helvetica-Bold',
+            leading=14,
+            borderWidth=0,
+            borderPadding=0,
+            leftIndent=0
+        )
+
+        # Header styles for contact info
+        contact_style = ParagraphStyle(
+            'ContactStyle',
+            parent=styles['Normal'],
+            fontSize=10,
+            textColor=colors.HexColor('#555555'),
+            spaceAfter=6,
+            alignment=TA_LEFT,
+            leading=14
+        )
+
+        body_style = ParagraphStyle(
+            'BodyStyle',
+            parent=styles['Normal'],
+            fontSize=10,
+            textColor=colors.HexColor('#333333'),
+            spaceAfter=6,
+            alignment=TA_JUSTIFY,
+            leading=14
+        )
+
+        job_title_style = ParagraphStyle(
+            'JobTitleStyle',
+            parent=styles['Normal'],
+            fontSize=10,
+            textColor=colors.HexColor('#1a1a1a'),
+            spaceAfter=3,
+            fontName='Helvetica-Bold',
+            leading=12
+        )
+
+        job_meta_style = ParagraphStyle(
+            'JobMetaStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=4,
+            fontName='Helvetica-Oblique',
+            leading=11
+        )
+
+        # Header avec nom, titre et contact infos alignés
+        personal_info = resume_data.get('personal_info', {})
+        full_name = personal_info.get('full_name', 'N/A').upper()
+
+        # Créer une table pour le header avec 2 colonnes (nom/titre à gauche, contact à droite)
+        contact_info_right = []
+        if personal_info.get('phone'):
+            contact_info_right.append(Paragraph(personal_info['phone'], contact_style))
+        if personal_info.get('email'):
+            contact_info_right.append(Paragraph(personal_info['email'], contact_style))
+
+        # Colonne gauche : Nom + Titre
+        left_column = []
+        left_column.append(Paragraph(full_name, title_style))
+
+        # Job title/headline if available
+        headline_text = ""
+        if resume_data.get('headline'):
+            headline_text = resume_data['headline']
+        elif personal_info.get('headline'):
+            headline_text = personal_info['headline']
+
+        if headline_text:
+            left_column.append(Paragraph(headline_text.upper(), subtitle_style))
+
+        # Si on a des contacts à droite, créer table 2 colonnes
+        if contact_info_right:
+            header_data = [[left_column, contact_info_right]]
+            header_table = Table(header_data, colWidths=[4.5*inch, 2.5*inch])
+            header_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            story.append(header_table)
+        else:
+            # Sinon juste le nom et titre
+            for item in left_column:
+                story.append(item)
+
+        # Horizontal separator line after header
+        story.append(Spacer(1, 0.08*inch))
+        separator = Table([['']], colWidths=[7*inch])
+        separator.setStyle(TableStyle([
+            ('LINEABOVE', (0, 0), (-1, -1), 1.5, colors.HexColor('#1a1a1a')),
+        ]))
+        story.append(separator)
+        story.append(Spacer(1, 0.15*inch))
+
+        # Professional Summary
+        if resume_data.get('professional_summary'):
+            story.append(Paragraph("PROFESSIONAL SUMMARY", heading_style))
+            # Add a thin line under section header
+            thin_line = Table([['']], colWidths=[7*inch])
+            thin_line.setStyle(TableStyle([
+                ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+            ]))
+            story.append(thin_line)
+            story.append(Spacer(1, 0.08*inch))
+
+            summary_text = resume_data['professional_summary']
+            story.append(Paragraph(summary_text, body_style))
+            story.append(Spacer(1, 0.12*inch))
+
+        # Work Experience
+        if resume_data.get('work_experience'):
+            story.append(Paragraph("WORK HISTORY", heading_style))
+            # Add a thin line under section header
+            thin_line = Table([['']], colWidths=[7*inch])
+            thin_line.setStyle(TableStyle([
+                ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+            ]))
+            story.append(thin_line)
+            story.append(Spacer(1, 0.08*inch))
+
+            for i, exp in enumerate(resume_data['work_experience']):
+                # Job title and dates on same line
+                title = exp.get('title', 'N/A')
+                start_date = exp.get('start_date', '')
+                end_date = exp.get('end_date', 'Present')
+                date_range = f"{start_date} - {end_date}" if start_date else end_date
+
+                # Title line with job title in bold
+                title_line = f"<b>{title}, {date_range}</b>"
+                story.append(Paragraph(title_line, job_title_style))
+
+                # Company and location line
+                company_parts = []
+                if exp.get('company'):
+                    company_parts.append(exp['company'])
+                if exp.get('location'):
+                    company_parts.append(exp['location'])
+
+                if company_parts:
+                    company_line = " – ".join(company_parts)
+                    story.append(Paragraph(f"<i>{company_line}</i>", job_meta_style))
+
+                # Description as narrative paragraph (priority)
+                if exp.get('description'):
+                    # Convert description to narrative format
+                    description = exp['description']
+                    story.append(Spacer(1, 0.04*inch))
+                    story.append(Paragraph(description, body_style))
+
+                # Achievements as bullet points (if provided AND no description, or as supplement)
+                elif exp.get('achievements'):
+                    story.append(Spacer(1, 0.04*inch))
+                    for achievement in exp['achievements']:
+                        bullet_text = f"• {achievement}"
+                        story.append(Paragraph(bullet_text, body_style))
+
+                story.append(Spacer(1, 0.12*inch))
+
+        # Skills Section - Two Column Layout
+        if resume_data.get('skills'):
+            story.append(Paragraph("SKILLS", heading_style))
+            # Add a thin line under section header
+            thin_line = Table([['']], colWidths=[7*inch])
+            thin_line.setStyle(TableStyle([
+                ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+            ]))
+            story.append(thin_line)
+            story.append(Spacer(1, 0.08*inch))
+
+            skills_dict = resume_data['skills']
+
+            # Organize skills into categories (check if dict or list)
+            if isinstance(skills_dict, dict):
+                # Skills organized by category
+                skill_items = []
+                for category, skills_list in skills_dict.items():
+                    if skills_list and category not in ['soft', 'other']:
+                        category_title = category.replace('_', ' ').title()
+                        if isinstance(skills_list, list):
+                            skills_text = ", ".join(skills_list)
+                        else:
+                            skills_text = str(skills_list)
+                        skill_item = f"<b>{category_title}:</b> {skills_text}"
+                        skill_items.append([Paragraph(skill_item, body_style)])
+            else:
+                # Skills as flat list - split into two columns
+                skill_items = []
+                skills_list = skills_dict if isinstance(skills_dict, list) else []
+                for skill in skills_list:
+                    skill_items.append([Paragraph(f"• {skill}", body_style)])
+
+            # Create two-column table for skills if we have enough items
+            if len(skill_items) > 3:
+                # Split into two columns
+                mid_point = (len(skill_items) + 1) // 2
+                left_col = skill_items[:mid_point]
+                right_col = skill_items[mid_point:]
+
+                # Pad right column if needed
+                while len(right_col) < len(left_col):
+                    right_col.append([Paragraph("", body_style)])
+
+                # Create table data
+                table_data = [[left_col[i][0], right_col[i][0]] for i in range(len(left_col))]
+
+                skills_table = Table(table_data, colWidths=[3.4*inch, 3.4*inch])
+                skills_table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                ]))
+                story.append(skills_table)
+            else:
+                # Single column for few items
+                for item in skill_items:
+                    story.append(item[0])
+
+            story.append(Spacer(1, 0.12*inch))
+
+        # Education (Formation)
+        if resume_data.get('education'):
+            story.append(Paragraph("FORMATION", heading_style))
+            # Add a thin line under section header
+            thin_line = Table([['']], colWidths=[7*inch])
+            thin_line.setStyle(TableStyle([
+                ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+            ]))
+            story.append(thin_line)
+            story.append(Spacer(1, 0.08*inch))
+
+            for edu in resume_data['education']:
+                degree = edu.get('degree', 'N/A')
+                school = edu.get('school', 'N/A')
+                location = edu.get('location', '')
+
+                # Format dates
+                start_date = edu.get('start_date', '')
+                end_date = edu.get('end_date', '')
+                grad_year = edu.get('graduation_year', '')
+                grad_date = edu.get('graduation_date', '')
+
+                # Build date range
+                date_range = ""
+                if start_date and end_date:
+                    date_range = f"{start_date}-{end_date}"
+                elif grad_date:
+                    date_range = grad_date
+                elif grad_year:
+                    date_range = grad_year
+
+                # Degree title (bold)
+                story.append(Paragraph(f"<b>{degree}</b>", job_title_style))
+
+                # Location (if available)
+                if location:
+                    story.append(Paragraph(location, job_meta_style))
+
+                # Date range
+                if date_range:
+                    story.append(Paragraph(f"<i>{date_range}</i>", job_meta_style))
+
+                story.append(Spacer(1, 0.1*inch))
+
+        # Build PDF
+        doc.build(story)
+        return output_path
+
+    def _generate_modern_docx(self, resume_data: Dict, output_path: str) -> str:
+        """Generate modern DOCX"""
+        doc = Document()
+
+        # Personal Info
+        personal_info = resume_data.get('personal_info', {})
+        name = doc.add_heading(personal_info.get('full_name', 'N/A'), 0)
+        name.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        contact = doc.add_paragraph()
+        contact.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        contact.add_run(f"{personal_info.get('email', '')} | {personal_info.get('phone', '')} | {personal_info.get('location', '')}")
+
+        # Professional Summary
+        if resume_data.get('professional_summary'):
+            doc.add_heading('PROFESSIONAL SUMMARY', level=1)
+            doc.add_paragraph(resume_data['professional_summary'])
+
+        # Work Experience
+        if resume_data.get('work_experience'):
+            doc.add_heading('WORK EXPERIENCE', level=1)
+            for exp in resume_data['work_experience']:
+                p = doc.add_paragraph()
+                p.add_run(f"{exp.get('title', 'N/A')} | {exp.get('company', 'N/A')}").bold = True
+
+                dates = f"{exp.get('start_date', '')} - {exp.get('end_date', 'Present')}"
+                if exp.get('location'):
+                    dates += f" | {exp['location']}"
+                doc.add_paragraph(dates, style='List Bullet')
+
+                if exp.get('achievements'):
+                    for achievement in exp['achievements']:
+                        doc.add_paragraph(achievement, style='List Bullet')
+
+        # Education
+        if resume_data.get('education'):
+            doc.add_heading('EDUCATION', level=1)
+            for edu in resume_data['education']:
+                p = doc.add_paragraph()
+                p.add_run(f"{edu.get('degree', 'N/A')} | {edu.get('school', 'N/A')}").bold = True
+
+                grad_info = f"{edu.get('field', '')} | Graduated: {edu.get('graduation_date', 'N/A')}"
+                doc.add_paragraph(grad_info, style='List Bullet')
+
+        # Skills
+        if resume_data.get('skills'):
+            doc.add_heading('SKILLS', level=1)
+            skills_dict = resume_data['skills']
+
+            if skills_dict.get('technical'):
+                p = doc.add_paragraph()
+                p.add_run('Technical: ').bold = True
+                p.add_run(", ".join(skills_dict['technical']))
+
+            if skills_dict.get('tools'):
+                p = doc.add_paragraph()
+                p.add_run('Tools: ').bold = True
+                p.add_run(", ".join(skills_dict['tools']))
+
+        # Save
+        doc.save(output_path)
+        return output_path
+
+    def _generate_classic_pdf(self, resume_data: Dict, output_path: str) -> str:
+        """Generate classic PDF - similar to modern but with traditional styling"""
+        # For now, use modern template
+        # You can customize this later with more conservative styling
+        return self._generate_modern_pdf(resume_data, output_path)
+
+    def _generate_classic_docx(self, resume_data: Dict, output_path: str) -> str:
+        """Generate classic DOCX"""
+        return self._generate_modern_docx(resume_data, output_path)
+
+    def _generate_technical_pdf(self, resume_data: Dict, output_path: str) -> str:
+        """Generate technical PDF - emphasizes skills and projects"""
+        return self._generate_modern_pdf(resume_data, output_path)
+
+    def _generate_technical_docx(self, resume_data: Dict, output_path: str) -> str:
+        """Generate technical DOCX"""
+        return self._generate_modern_docx(resume_data, output_path)
+
+    def _generate_from_docx_template(
+        self,
+        resume_data: Dict,
+        output_path: str,
+        template_key: str = "sales"
+    ) -> str:
+        """
+        Generate resume using a pre-made DOCX template.
+
+        This method loads a template file and fills it with the resume data.
+        It uses a simple find-and-replace approach for placeholders.
+
+        Args:
+            resume_data: Structured resume data
+            output_path: Path to save the generated DOCX
+            template_key: Key for template (accounting, sales, attorney, office_manager)
+
+        Returns:
+            str: Path to generated DOCX
+        """
+        # Get template file path
+        template_filename = self.docx_templates.get(template_key, self.docx_templates["sales"])
+        template_path = os.path.join(self.templates_dir, template_filename)
+
+        if not os.path.exists(template_path):
+            print(f"Warning: Template not found at {template_path}")
+            print("Falling back to custom generation")
+            return self._generate_modern_docx(resume_data, output_path)
+
+        print(f"Using template: {template_path}")
+
+        try:
+            # Load template
+            doc = Document(template_path)
+
+            # Extract resume data
+            personal_info = resume_data.get("personal_info", {})
+            professional_summary = resume_data.get("professional_summary", "")
+            experiences = resume_data.get("work_experience", [])
+            education = resume_data.get("education", [])
+            skills = resume_data.get("skills", {})
+
+            # Replace placeholders in the document
+            # This is a simplified approach - you may need to customize based on actual template structure
+            replacements = {
+                "[Your Name]": personal_info.get("full_name", ""),
+                "[Your Email]": personal_info.get("email", ""),
+                "[Your Phone]": personal_info.get("phone", ""),
+                "[Your Location]": personal_info.get("location", ""),
+                "[LinkedIn URL]": personal_info.get("linkedin", ""),
+                "[Professional Summary]": professional_summary,
+            }
+
+            # Replace text in paragraphs
+            for paragraph in doc.paragraphs:
+                for key, value in replacements.items():
+                    if key in paragraph.text:
+                        # Replace inline
+                        for run in paragraph.runs:
+                            if key in run.text:
+                                run.text = run.text.replace(key, value)
+
+            # Replace in tables (many templates use tables for layout)
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for key, value in replacements.items():
+                            if key in cell.text:
+                                for paragraph in cell.paragraphs:
+                                    for run in paragraph.runs:
+                                        if key in run.text:
+                                            run.text = run.text.replace(key, value)
+
+            # Clear existing content sections and add new content
+            # Note: This is a simplified implementation
+            # You may need to customize based on the actual template structure
+
+            # Save the modified document
+            doc.save(output_path)
+            print(f"Generated resume using template: {output_path}")
+            return output_path
+
+        except Exception as e:
+            print(f"Error using template: {e}")
+            print("Falling back to custom generation")
+            return self._generate_modern_docx(resume_data, output_path)
+
+
+# Convenience functions
+def generate_resume_pdf(resume_data: Dict, output_path: str, template: str = "modern") -> str:
+    """Generate PDF resume"""
+    generator = ATSTemplateGenerator()
+    return generator.generate_pdf(resume_data, output_path, template)
+
+
+def generate_resume_docx(resume_data: Dict, output_path: str, template: str = "modern") -> str:
+    """Generate DOCX resume"""
+    generator = ATSTemplateGenerator()
+    return generator.generate_docx(resume_data, output_path, template)

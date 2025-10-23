@@ -1,0 +1,91 @@
+{
+  "full_name": "Antoine Pedretti",
+  "email": "antoine.pedretti@example.com",
+  "phone": "+33 6 12 34 56 78",
+  "location": "Paris, France",
+  "profile_url": "https://linkedin.com/in/antoinepedretti",
+  "headline": "DevOps Engineer | Cloud Infrastructure Specialist",
+  "summary": "Experienced DevOps Engineer with 3+ years of expertise in cloud infrastructure, CI/CD automation, and container orchestration. Successfully scaled distributed systems from 0 to 100+ cities, managing €15M infrastructure budget. Passionate about GitOps, Infrastructure as Code, and DevSecOps practices.",
+  "photo_url": "https://media.licdn.com/dms/image/test/photo.jpg",
+  "profile_image_url": "https://media.licdn.com/dms/image/test/photo.jpg",
+  "additional_links": [
+    "https://github.com/antoinepedretti",
+    "https://antoinepedretti.dev"
+  ],
+  "experiences": [
+    {
+      "title": "DevOps Engineer",
+      "company": "Vizzia Technologies",
+      "location": "Paris, France",
+      "start_date": "Oct 2023",
+      "end_date": "Present",
+      "description": "Leading DevOps initiatives for cloud infrastructure modernization and CI/CD automation. Managing AWS infrastructure supporting 100+ microservices with 99.99% uptime."
+    },
+    {
+      "title": "Cloud Engineer",
+      "company": "StartupXYZ",
+      "location": "Paris, France",
+      "start_date": "Jan 2021",
+      "end_date": "Sep 2023",
+      "description": "Designed and implemented cloud infrastructure on AWS. Built CI/CD pipelines reducing deployment time by 70%. Managed Kubernetes clusters serving 1M+ users."
+    },
+    {
+      "title": "Junior DevOps Engineer",
+      "company": "Tech Solutions Inc",
+      "location": "Lyon, France",
+      "start_date": "Jun 2019",
+      "end_date": "Dec 2020",
+      "description": "Supported infrastructure operations and automation tasks. Learned Docker, Kubernetes, and cloud technologies."
+    }
+  ],
+  "education": [
+    {
+      "degree": "Master of Science - Cloud Computing & Cybersecurity",
+      "school": "IPSSI",
+      "field": "Cloud Computing & Cybersecurity",
+      "location": "Paris, France",
+      "start_date": "2023",
+      "end_date": "2025",
+      "graduation_date": "Expected 2025"
+    },
+    {
+      "degree": "Bachelor of Science - Computer Science",
+      "school": "University of Lyon",
+      "field": "Computer Science",
+      "location": "Lyon, France",
+      "start_date": "2016",
+      "end_date": "2019",
+      "graduation_year": "2019"
+    }
+  ],
+  "skills": [
+    "AWS",
+    "Azure",
+    "Docker",
+    "Kubernetes",
+    "Terraform",
+    "Ansible",
+    "Jenkins",
+    "GitLab CI",
+    "GitHub Actions",
+    "Python",
+    "Bash",
+    "Linux",
+    "Git",
+    "CI/CD",
+    "GitOps",
+    "DevSecOps",
+    "Infrastructure as Code",
+    "Prometheus",
+    "Grafana",
+    "ELK Stack"
+  ],
+  "certifications": [
+    {
+      "name": "AWS Certified Solutions Architect - Associate",
+      "authority": "Amazon Web Services",
+      "date": "2022",
+      "status": "Completed"
+    }
+  ]
+}

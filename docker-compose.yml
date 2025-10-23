@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: resumesync-db
+    environment:
+      POSTGRES_USER: resumesync
+      POSTGRES_PASSWORD: resumesync
+      POSTGRES_DB: resumesync
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U resumesync"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - resumesync-network
+
+  # Redis Cache (optional, for sessions/caching)
+  redis:
+    image: redis:7-alpine
+    container_name: resumesync-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - resumesync-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: resumesync-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://resumesync:resumesync@db:5432/resumesync
+      DATABASE_URL_ASYNC: postgresql+asyncpg://resumesync:resumesync@db:5432/resumesync
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+      - ./teamplate:/app/teamplate
+      - ./linkedin_scraper_final.py:/app/legacy/linkedin_scraper_final.py
+      - ./linkedin_api_scraper.py:/app/legacy/linkedin_api_scraper.py
+      - ./job_scraper.py:/app/legacy/job_scraper.py
+      - ./openai_generator.py:/app/legacy/openai_generator.py
+      - ./pdf_generator.py:/app/legacy/pdf_generator.py
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - resumesync-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend (React)
+  frontend:
+    image: node:18-alpine
+    container_name: resumesync-frontend
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: sh -c "npm install && npm run dev -- --host"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    networks:
+      - resumesync-network
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  resumesync-network:
+    driver: bridge

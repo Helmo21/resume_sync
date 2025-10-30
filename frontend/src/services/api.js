@@ -20,7 +20,8 @@ api.interceptors.request.use((config) => {
 
 // Auth
 export const auth = {
-  getLinkedInAuthUrl: () => api.get('/auth/linkedin/login'),
+  register: (email, password) => api.post('/auth/register', { email, password }),
+  login: (email, password) => api.post('/auth/login', { email, password }),
   getCurrentUser: () => api.get('/auth/me'),
 }
 
@@ -49,6 +50,29 @@ export const resumes = {
   downloadResume: (id, format = 'pdf') =>
     api.get(`/resumes/${id}/download`, { params: { format } }),
   listTemplates: () => api.get('/resumes/templates/list'),
+}
+
+// Uploaded Resumes (for job search feature)
+export const uploadedResumes = {
+  uploadResume: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/uploaded-resumes/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
+  listUploadedResumes: () => api.get('/uploaded-resumes/'),
+  getUploadedResume: (id) => api.get(`/uploaded-resumes/${id}`),
+  analyzeResume: (id) => api.post(`/uploaded-resumes/${id}/analyze`),
+  deleteUploadedResume: (id) => api.delete(`/uploaded-resumes/${id}`),
+}
+
+// Job Search (LinkedIn scraping)
+export const jobSearch = {
+  searchJobs: (data) => api.post('/job-search/search', data),
+  getScrapedJobs: (resumeId) => api.get(`/job-search/resume/${resumeId}/jobs`),
 }
 
 export default api

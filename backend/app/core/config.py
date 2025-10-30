@@ -17,10 +17,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
 
-    # LinkedIn OAuth
-    LINKEDIN_CLIENT_ID: str
-    LINKEDIN_CLIENT_SECRET: str
-    LINKEDIN_REDIRECT_URI: str
+    # LinkedIn OAuth (deprecated - no longer used)
+    LINKEDIN_CLIENT_ID: Optional[str] = None
+    LINKEDIN_CLIENT_SECRET: Optional[str] = None
+    LINKEDIN_REDIRECT_URI: Optional[str] = None
 
     # Apify (LinkedIn Profile Scraper)
     APIFY_API_TOKEN: Optional[str] = None

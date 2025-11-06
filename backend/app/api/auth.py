@@ -1,166 +1,113 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, status
-from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
-import sys
-import os
-
-# Add legacy code to path
-sys.path.append('/app/legacy')
 
 from ..core.database import get_db
-from ..core.security import create_access_token, verify_token
-from ..core.config import settings
+from ..core.security import verify_token, hash_password, verify_password, create_access_token
 from ..models.user import User
 from ..models.profile import LinkedInProfile
-
-# Import your existing LinkedIn scraper
-try:
-    import linkedin_scraper_final
-except ImportError:
-    linkedin_scraper_final = None
 
 router = APIRouter()
 
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
-    token_type: str
-    user: dict
+    token_type: str = "bearer"
 
 
 class UserResponse(BaseModel):
     id: str
     email: str
     name: Optional[str] = None
-    linkedin_id: Optional[str]
     subscription_status: str
     resumes_generated_count: str
 
 
-@router.get("/linkedin/login")
-async def linkedin_login():
-    """Redirect to LinkedIn OAuth"""
-    # Request comprehensive profile access
-    # Note: r_liteprofile is deprecated, using w_member_social for profile access
-    # openid, profile, email - basic OAuth2 scopes
-    # r_basicprofile - basic profile (deprecated but may still work)
-    # w_member_social - allows reading member's profile
-    linkedin_auth_url = (
-        f"https://www.linkedin.com/oauth/v2/authorization"
-        f"?response_type=code"
-        f"&client_id={settings.LINKEDIN_CLIENT_ID}"
-        f"&redirect_uri={settings.LINKEDIN_REDIRECT_URI}"
-        f"&scope=openid%20profile%20email%20w_member_social"
+@router.post("/register", response_model=TokenResponse)
+async def register(
+    request: RegisterRequest,
+    db: Session = Depends(get_db)
+):
+    """Register a new user with email and password"""
+
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.email == request.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+
+    # Create new user
+    hashed_password = hash_password(request.password)
+    new_user = User(
+        email=request.email,
+        password_hash=hashed_password
     )
-    return {"auth_url": linkedin_auth_url}
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    # Create empty LinkedIn profile for the user
+    # This ensures resume generation doesn't fail
+    empty_profile = LinkedInProfile(
+        user_id=new_user.id,
+        headline="",
+        summary="",
+        raw_data={"name": request.email.split('@')[0]},  # Use email prefix as default name
+        experiences=[],
+        education=[],
+        skills=[],
+        certifications=[]
+    )
+    db.add(empty_profile)
+    db.commit()
+
+    # Create access token
+    access_token = create_access_token(data={"sub": str(new_user.id), "email": new_user.email})
+
+    return TokenResponse(access_token=access_token)
 
 
-@router.get("/linkedin/callback")
-async def linkedin_callback(code: str, db: Session = Depends(get_db)):
-    """Handle LinkedIn OAuth callback"""
+@router.post("/login", response_model=TokenResponse)
+async def login(
+    request: LoginRequest,
+    db: Session = Depends(get_db)
+):
+    """Login with email and password"""
 
-    if not code:
-        raise HTTPException(status_code=400, detail="Authorization code not provided")
+    # Find user by email
+    user = db.query(User).filter(User.email == request.email).first()
 
-    try:
-        # Import your existing LinkedIn OAuth handler
-        import requests
+    if not user or not user.password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
 
-        # Exchange code for access token
-        token_url = "https://www.linkedin.com/oauth/v2/accessToken"
-        token_data = {
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": settings.LINKEDIN_REDIRECT_URI,
-            "client_id": settings.LINKEDIN_CLIENT_ID,
-            "client_secret": settings.LINKEDIN_CLIENT_SECRET,
-        }
+    # Verify password
+    if not verify_password(request.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
 
-        token_response = requests.post(token_url, data=token_data)
-        token_response.raise_for_status()
-        token_json = token_response.json()
-        access_token = token_json.get("access_token")
+    # Create access token
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
 
-        if not access_token:
-            raise HTTPException(status_code=400, detail="Failed to get access token")
-
-        # Get LinkedIn profile data using access token
-        profile_url = "https://api.linkedin.com/v2/userinfo"
-        headers = {"Authorization": f"Bearer {access_token}"}
-        profile_response = requests.get(profile_url, headers=headers)
-        profile_response.raise_for_status()
-        profile_data = profile_response.json()
-
-        # Extract user info
-        linkedin_id = profile_data.get("sub")
-        email = profile_data.get("email")
-        full_name = profile_data.get("name", "")  # Get user's full name
-        
-        # Try to construct LinkedIn profile URL from vanity name
-        profile_url_linkedin = None
-        vanity_name = profile_data.get("sub")  # LinkedIn ID can be used to construct URL
-        # Note: LinkedIn doesn't always provide the vanity URL in OAuth, but we'll try
-
-        if not linkedin_id or not email:
-            raise HTTPException(status_code=400, detail="Failed to get user info from LinkedIn")
-
-        # Check if user exists by linkedin_id OR email (prevent duplicate email error)
-        user = db.query(User).filter(
-            (User.linkedin_id == linkedin_id) | (User.email == email)
-        ).first()
-
-        if not user:
-            # Create new user
-            user = User(
-                email=email,
-                linkedin_id=linkedin_id,
-                linkedin_access_token=access_token,
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-
-            # Try to fetch profile data using Apify
-            # First create a basic profile, then we'll try to enhance it with Apify in background
-            profile_raw_data = profile_data.copy()
-            profile_raw_data["name"] = full_name
-
-            linkedin_profile = LinkedInProfile(
-                user_id=user.id,
-                raw_data=profile_raw_data,
-                headline=full_name,  # Start with basic name
-                summary="",
-                experiences=[],
-                education=[],
-                skills=[],
-                certifications=[]
-            )
-
-            print(f"✓ Basic LinkedIn profile created for {email}")
-            print(f"   User will be prompted to sync their full profile via Apify")
-
-            db.add(linkedin_profile)
-            db.commit()
-        else:
-            # Update existing user (in case linkedin_id changed or user logging in again)
-            user.linkedin_id = linkedin_id
-            user.linkedin_access_token = access_token
-            db.commit()
-            print(f"✓ Existing user {email} logged in")
-
-        # Create JWT token
-        jwt_token = create_access_token({"sub": str(user.id)})
-
-        # Redirect to frontend with token
-        frontend_redirect = f"{settings.FRONTEND_URL}/auth/callback?token={jwt_token}"
-        return RedirectResponse(url=frontend_redirect)
-
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=400, detail=f"LinkedIn API error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    return TokenResponse(access_token=access_token)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -204,7 +151,6 @@ async def get_current_user(
         id=str(user.id),
         email=user.email,
         name=name,
-        linkedin_id=user.linkedin_id,
         subscription_status=user.subscription_status.value,
         resumes_generated_count=user.resumes_generated_count
     )

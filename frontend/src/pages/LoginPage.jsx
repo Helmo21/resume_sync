@@ -6,7 +6,11 @@ import { auth } from '../services/api'
 function LoginPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const [isLogin, setIsLogin] = useState(true)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (user) {
@@ -14,15 +18,27 @@ function LoginPage() {
     }
   }, [user, navigate])
 
-  const handleLinkedInLogin = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
     setLoading(true)
+
     try {
-      const response = await auth.getLinkedInAuthUrl()
-      // Redirect to LinkedIn OAuth
-      window.location.href = response.data.auth_url
+      const response = isLogin
+        ? await auth.login(email, password)
+        : await auth.register(email, password)
+
+      // Save token to localStorage
+      localStorage.setItem('token', response.data.access_token)
+
+      // Reload to trigger auth context update
+      window.location.href = '/dashboard'
     } catch (error) {
-      console.error('Failed to get LinkedIn auth URL:', error)
-      alert('Failed to initiate LinkedIn login. Please try again.')
+      console.error('Auth error:', error)
+      setError(
+        error.response?.data?.detail ||
+        `Failed to ${isLogin ? 'login' : 'register'}. Please try again.`
+      )
       setLoading(false)
     }
   }
@@ -37,26 +53,69 @@ function LoginPage() {
           </p>
         </div>
 
-        <div className="space-y-4">
-          <button
-            onClick={handleLinkedInLogin}
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              'Loading...'
-            ) : (
-              <>
-                <svg
-                  className="w-6 h-6 mr-3"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-                </svg>
-                Sign in with LinkedIn
-              </>
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="••••••••"
+            />
+            {!isLogin && (
+              <p className="mt-1 text-xs text-gray-500">
+                Password must be at least 6 characters
+              </p>
             )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Please wait...' : (isLogin ? 'Login' : 'Create Account')}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => {
+              setIsLogin(!isLogin)
+              setError('')
+            }}
+            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+          >
+            {isLogin
+              ? "Don't have an account? Sign up"
+              : 'Already have an account? Login'}
           </button>
         </div>
 

@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Profile from './pages/Profile'
 import GenerateResume from './pages/GenerateResume'
 import ResumeHistory from './pages/ResumeHistory'
+import FindJobs from './pages/FindJobs'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -65,6 +66,15 @@ function App() {
         element={
           <ProtectedRoute>
             <ResumeHistory />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/find-jobs"
+        element={
+          <ProtectedRoute>
+            <FindJobs />
           </ProtectedRoute>
         }
       />

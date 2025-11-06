@@ -74,7 +74,7 @@ function Dashboard() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {/* Generate New Resume Card */}
           <div
             onClick={() => navigate('/generate')}
@@ -103,10 +103,38 @@ function Dashboard() {
             </p>
           </div>
 
+          {/* Find Jobs Card - NEW */}
+          <div
+            onClick={() => navigate('/find-jobs')}
+            className="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition duration-200 cursor-pointer border-2 border-transparent hover:border-purple-500"
+          >
+            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+              <svg
+                className="w-8 h-8 text-purple-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">
+              Find Jobs
+            </h3>
+            <p className="text-gray-600">
+              Upload your resume and find matching job opportunities
+            </p>
+          </div>
+
           {/* Resume History Card */}
           <div
             onClick={() => navigate('/history')}
-            className="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition duration-200 cursor-pointer border-2 border-transparent hover:border-blue-500"
+            className="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition duration-200 cursor-pointer border-2 border-transparent hover:border-green-500"
           >
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
               <svg

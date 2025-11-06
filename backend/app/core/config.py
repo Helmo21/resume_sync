@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # Apify (LinkedIn Profile Scraper)
     APIFY_API_TOKEN: Optional[str] = None
 
+    # LinkedIn Service Accounts (for Job Scraping)
+    LINKEDIN_SERVICE_ACCOUNTS: Optional[str] = None
+    LINKEDIN_PREMIUM_ACCOUNTS: Optional[str] = None
+
     # OpenRouter (AI Model Provider)
     OPENROUTER_API_KEY: str
     OPENROUTER_MODEL: str = "anthropic/claude-3.5-sonnet"

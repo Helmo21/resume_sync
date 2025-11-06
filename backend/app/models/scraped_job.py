@@ -28,9 +28,10 @@ class ScrapedJob(Base):
     employment_type = Column(String, nullable=True)  # Full-time, Part-time, Contract
     seniority_level = Column(String, nullable=True)
 
-    # Match data (populated by Phase 5)
+    # Match data (populated by AI matching service)
     match_score = Column(Float, nullable=True)  # 0-100 relevance score
-    match_reasoning = Column(Text, nullable=True)
+    match_reasoning = Column(Text, nullable=True)  # Legacy text reasoning
+    match_details = Column(JSONB, nullable=True)  # Structured match data: {matching_skills, missing_skills, experience_fit, reasoning}
 
     # Raw data
     raw_html = Column(Text, nullable=True)

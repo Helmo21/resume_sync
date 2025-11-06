@@ -3,7 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from .core.config import settings
-from .api import auth, resumes, profile, jobs
+from .api import auth, resumes, profile, jobs, uploaded_resumes, job_search, job_search_v2
+from .core.database import SessionLocal
+from .core.service_account_loader import load_service_accounts_from_env, verify_service_accounts
 import os
 
 app = FastAPI(
@@ -11,6 +13,37 @@ app = FastAPI(
     debug=settings.DEBUG,
     version="1.0.0"
 )
+
+
+# Startup Event: Auto-load LinkedIn service accounts from .env
+@app.on_event("startup")
+async def startup_event():
+    """
+    Run on application startup:
+    1. Load LinkedIn service accounts from .env
+    2. Verify accounts are available
+    """
+    print("\n" + "="*60)
+    print("🚀 ResumeSync Backend - Starting Up")
+    print("="*60 + "\n")
+
+    # Load service accounts from environment variables
+    db = SessionLocal()
+    try:
+        print("📧 Loading LinkedIn service accounts from .env...")
+        results = load_service_accounts_from_env(db)
+
+        # Verify accounts
+        verify_service_accounts(db)
+
+    except Exception as e:
+        print(f"❌ Error loading service accounts: {str(e)}")
+    finally:
+        db.close()
+
+    print("\n" + "="*60)
+    print("✅ ResumeSync Backend - Ready")
+    print("="*60 + "\n")
 
 # CORS configuration
 app.add_middleware(
@@ -32,6 +65,9 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(profile.router, prefix="/api/profile", tags=["Profile"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(resumes.router, prefix="/api/resumes", tags=["Resumes"])
+app.include_router(uploaded_resumes.router, prefix="/api/uploaded-resumes", tags=["Uploaded Resumes"])
+app.include_router(job_search.router, prefix="/api/job-search", tags=["Job Search (Legacy)"])
+app.include_router(job_search_v2.router, prefix="/api/jobs", tags=["Job Search V2"])
 
 
 @app.get("/")

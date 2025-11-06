@@ -24,11 +24,17 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Install runtime dependencies
+# Firefox for Camoufox, Chromium for Selenium fallback, Xvfb for headless display
 RUN apt-get update && apt-get install -y \
     postgresql-client \
     curl \
     chromium \
     chromium-driver \
+    firefox-esr \
+    xvfb \
+    libgtk-3-0 \
+    libdbus-glib-1-2 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder
@@ -37,6 +43,10 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY . .
+
+# Trigger browserforge data download as root (before switching to appuser)
+RUN python3 init_browserforge.py || echo "Browserforge init skipped" && \
+    chmod -R 755 /usr/local/lib/python3.10/site-packages/browserforge 2>/dev/null || true
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \

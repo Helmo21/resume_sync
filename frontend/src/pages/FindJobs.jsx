@@ -20,6 +20,9 @@ function FindJobs() {
   const [searchingJobs, setSearchingJobs] = useState(false)
   const [searchLocation, setSearchLocation] = useState('')
   const [searchRemoteOnly, setSearchRemoteOnly] = useState(false)
+  const [searchTaskId, setSearchTaskId] = useState(null)
+  const [searchStatus, setSearchStatus] = useState(null)
+  const [minMatchScore, setMinMatchScore] = useState(0)
 
   useEffect(() => {
     loadUploadedResumes()
@@ -139,7 +142,7 @@ function FindJobs() {
 
   const loadScrapedJobs = async (resumeId) => {
     try {
-      const response = await jobSearch.getScrapedJobs(resumeId)
+      const response = await jobSearch.getMatchedJobs(resumeId, { min_score: minMatchScore, limit: 50 })
       setScrapedJobs(response.data)
     } catch (error) {
       console.error('Failed to load scraped jobs:', error)
@@ -147,25 +150,81 @@ function FindJobs() {
     }
   }
 
+  const pollSearchStatus = async (taskId, resumeId) => {
+    const maxAttempts = 60 // 5 minutes max (60 * 5s = 300s)
+    let attempts = 0
+
+    const poll = async () => {
+      try {
+        const response = await jobSearch.getSearchStatus(taskId)
+        const status = response.data.status
+        const result = response.data.result
+
+        setSearchStatus(status)
+
+        if (status === 'SUCCESS') {
+          clearInterval(pollInterval)
+          setSearchingJobs(false)
+          setSearchTaskId(null)
+          setSearchStatus(null)
+
+          alert(`Successfully found ${result.jobs_found} jobs! (${result.jobs_saved} new) | Scraper: ${result.scraper_mode} | Top Match: ${result.top_match_score || 'N/A'}%`)
+
+          // Reload scraped jobs
+          await loadScrapedJobs(resumeId)
+        } else if (status === 'FAILURE') {
+          clearInterval(pollInterval)
+          setSearchingJobs(false)
+          setSearchTaskId(null)
+          setSearchStatus(null)
+
+          const errorMsg = result?.error || result || 'Unknown error'
+          alert(`Job search failed: ${errorMsg}`)
+        } else if (attempts >= maxAttempts) {
+          clearInterval(pollInterval)
+          setSearchingJobs(false)
+          setSearchTaskId(null)
+          setSearchStatus(null)
+
+          alert('Job search timed out. Please try again.')
+        }
+
+        attempts++
+      } catch (error) {
+        console.error('Failed to poll status:', error)
+        clearInterval(pollInterval)
+        setSearchingJobs(false)
+        setSearchTaskId(null)
+        setSearchStatus(null)
+      }
+    }
+
+    const pollInterval = setInterval(poll, 5000) // Poll every 5 seconds
+    poll() // Initial poll
+  }
+
   const handleSearchJobs = async (resumeId) => {
     try {
       setSearchingJobs(true)
-      const response = await jobSearch.searchJobs({
+      setSearchStatus('PENDING')
+
+      const response = await jobSearch.startJobSearch({
         resume_id: resumeId,
         location: searchLocation || null,
         remote_only: searchRemoteOnly,
-        max_results: 20
+        max_results: 50  // Reduced to 50 to avoid timeout (balance of speed vs quantity)
       })
 
-      alert(`Successfully found ${response.data.jobs_found} jobs! (${response.data.jobs_saved} new)`)
+      const taskId = response.data.task_id
+      setSearchTaskId(taskId)
 
-      // Reload scraped jobs
-      await loadScrapedJobs(resumeId)
+      // Start polling
+      pollSearchStatus(taskId, resumeId)
     } catch (error) {
       console.error('Job search failed:', error)
-      alert(error.response?.data?.detail || 'Job search failed. Please try again.')
-    } finally {
+      alert(error.response?.data?.detail || 'Failed to start job search. Please try again.')
       setSearchingJobs(false)
+      setSearchStatus(null)
     }
   }
 
@@ -551,11 +610,20 @@ function FindJobs() {
                     )}
                   </button>
 
-                  {/* Warning about search time */}
+                  {/* Warning about search time + Status */}
                   {searchingJobs && (
                     <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg className="animate-spin h-4 w-4 text-yellow-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p className="text-xs font-medium text-yellow-800">
+                          Status: {searchStatus || 'Starting...'}
+                        </p>
+                      </div>
                       <p className="text-xs text-yellow-800">
-                        This process takes 1-3 minutes. Please don't close this window.
+                        Searching LinkedIn with AI matching (1-3 minutes). Please don't close this window.
                       </p>
                     </div>
                   )}
@@ -563,9 +631,27 @@ function FindJobs() {
                   {/* Scraped Jobs Display */}
                   {scrapedJobs.length > 0 && (
                     <div className="mt-6">
-                      <h4 className="font-medium text-gray-900 mb-3">
-                        Found Jobs ({scrapedJobs.length})
-                      </h4>
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="font-medium text-gray-900">
+                          Found Jobs ({scrapedJobs.length})
+                        </h4>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-gray-600">Min Match:</label>
+                          <select
+                            value={minMatchScore}
+                            onChange={(e) => {
+                              setMinMatchScore(Number(e.target.value))
+                              loadScrapedJobs(selectedResume.id)
+                            }}
+                            className="text-xs px-2 py-1 border border-gray-300 rounded"
+                          >
+                            <option value={0}>All Matches (0%+)</option>
+                            <option value={40}>Decent+ (40%+)</option>
+                            <option value={60}>Good+ (60%+)</option>
+                            <option value={80}>Strong+ (80%+)</option>
+                          </select>
+                        </div>
+                      </div>
                       <div className="space-y-3 max-h-96 overflow-y-auto">
                         {scrapedJobs.map((job) => (
                           <div
@@ -574,7 +660,30 @@ function FindJobs() {
                           >
                             <div className="flex justify-between items-start mb-2">
                               <div className="flex-1">
-                                <h5 className="font-semibold text-gray-900">{job.job_title || 'Untitled'}</h5>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h5 className="font-semibold text-gray-900">{job.job_title || 'Untitled'}</h5>
+                                  {job.match_score !== null && job.match_score !== undefined && (
+                                    <span
+                                      className={`px-2 py-1 rounded text-xs font-bold ${
+                                        job.match_score >= 80
+                                          ? 'bg-green-100 text-green-800'
+                                          : job.match_score >= 60
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : job.match_score >= 40
+                                          ? 'bg-yellow-100 text-yellow-800'
+                                          : 'bg-orange-100 text-orange-800'
+                                      }`}
+                                      title={
+                                        job.match_score >= 80 ? 'Strong Match - Apply with confidence!' :
+                                        job.match_score >= 60 ? 'Good Match - Worth applying' :
+                                        job.match_score >= 40 ? 'Decent Match - Could grow into role' :
+                                        'Partial Match - Consider if interested in learning'
+                                      }
+                                    >
+                                      {job.match_score}% Match
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-sm text-gray-600">{job.company_name || 'Unknown Company'}</p>
                               </div>
                               {job.is_remote && (
@@ -596,6 +705,62 @@ function FindJobs() {
                               </p>
                             )}
 
+                            {/* Match Details */}
+                            {job.match_details && (
+                              <div className="mb-3 p-3 bg-gray-50 rounded border border-gray-200">
+                                <p className="text-xs font-medium text-gray-700 mb-2">
+                                  🎯 AI Match Analysis
+                                  <span className="ml-2 text-gray-500 font-normal">(Priority: Tech Skills → Soft Skills → Experience → Industry)</span>
+                                </p>
+
+                                {job.match_details.matching_skills?.length > 0 && (
+                                  <div className="mb-2">
+                                    <p className="text-xs text-green-700 font-medium mb-1">
+                                      ✓ Matching Skills ({job.match_details.matching_skills.length}):
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {job.match_details.matching_skills.slice(0, 8).map((skill, idx) => (
+                                        <span key={idx} className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                                          {skill}
+                                        </span>
+                                      ))}
+                                      {job.match_details.matching_skills.length > 8 && (
+                                        <span className="text-xs text-gray-500">+{job.match_details.matching_skills.length - 8} more</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {job.match_details.missing_skills?.length > 0 && (
+                                  <div className="mb-2">
+                                    <p className="text-xs text-orange-700 font-medium mb-1">⚠ Skills to Develop:</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {job.match_details.missing_skills.slice(0, 5).map((skill, idx) => (
+                                        <span key={idx} className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">
+                                          {skill}
+                                        </span>
+                                      ))}
+                                      {job.match_details.missing_skills.length > 5 && (
+                                        <span className="text-xs text-gray-500">+{job.match_details.missing_skills.length - 5} more</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {job.match_details.experience_fit && (
+                                  <p className="text-xs text-gray-600 mb-1">
+                                    <span className="font-medium">Experience Fit:</span> {job.match_details.experience_fit}
+                                  </p>
+                                )}
+
+                                {job.match_details.reasoning && (
+                                  <p className="text-xs text-gray-600 italic">
+                                    "{job.match_details.reasoning}"
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
                             {job.description && (
                               <p className="text-sm text-gray-700 mb-3 line-clamp-2">
                                 {job.description}
@@ -606,9 +771,12 @@ function FindJobs() {
                               href={job.linkedin_post_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-block px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                             >
-                              View on LinkedIn →
+                              Apply on LinkedIn
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                              </svg>
                             </a>
                           </div>
                         ))}
@@ -646,8 +814,10 @@ function FindJobs() {
             <li>Upload your resume (PDF or DOCX)</li>
             <li>AI analyzes it and extracts search keywords</li>
             <li>Click "View Analysis" on an analyzed resume</li>
-            <li>Use "Search Jobs on LinkedIn" to find matching jobs</li>
-            <li>The system automatically searches LinkedIn and shows you results</li>
+            <li>Use "Search Jobs on LinkedIn" to find matching jobs with AI matching</li>
+            <li>The system automatically searches LinkedIn, analyzes each job, and ranks them by match score</li>
+            <li>View detailed match analysis including matching skills, missing skills, and experience fit</li>
+            <li>Filter results by minimum match score (50%, 70%, 85%+)</li>
           </ol>
         </div>
       </main>

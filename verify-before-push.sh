@@ -137,7 +137,45 @@ else
 fi
 
 echo ""
-echo "6. Large Files Check"
+echo "6. Database Health Checks"
+echo "-------------------------"
+
+# Check if Docker Compose is running
+if docker compose ps | grep -q "resumesync-db.*running"; then
+    check_pass "Database container is running"
+
+    # Check if all required tables exist
+    REQUIRED_TABLES=("users" "linkedin_profiles" "job_postings" "resumes" "uploaded_resumes" "scraped_jobs" "linkedin_service_accounts")
+    MISSING_TABLES=()
+
+    for table in "${REQUIRED_TABLES[@]}"; do
+        if ! docker compose exec -T db psql -U resumesync -d resumesync -t -c "\dt" 2>/dev/null | grep -q "$table"; then
+            MISSING_TABLES+=("$table")
+        fi
+    done
+
+    if [ ${#MISSING_TABLES[@]} -eq 0 ]; then
+        check_pass "All ${#REQUIRED_TABLES[@]} required database tables exist"
+    else
+        check_fail "Missing database tables: ${MISSING_TABLES[*]}"
+        echo "      Run: docker compose exec backend alembic upgrade head"
+    fi
+
+    # Check if migrations are up to date
+    MIGRATION_VERSION=$(docker compose exec -T db psql -U resumesync -d resumesync -t -c "SELECT version_num FROM alembic_version;" 2>/dev/null | tr -d ' \n')
+    if [ -n "$MIGRATION_VERSION" ]; then
+        check_pass "Database migrations applied (version: $MIGRATION_VERSION)"
+    else
+        check_fail "No database migrations applied!"
+        echo "      Run: docker compose exec backend alembic upgrade head"
+    fi
+else
+    check_warn "Database container not running - skipping database checks"
+    echo "      Run: ./START.sh to start services"
+fi
+
+echo ""
+echo "7. Large Files Check"
 echo "--------------------"
 
 # Check for files larger than 10MB

@@ -23,6 +23,7 @@ function FindJobs() {
   const [searchTaskId, setSearchTaskId] = useState(null)
   const [searchStatus, setSearchStatus] = useState(null)
   const [minMatchScore, setMinMatchScore] = useState(0)
+  const [hasSearchedJobs, setHasSearchedJobs] = useState(false)
 
   useEffect(() => {
     loadUploadedResumes()
@@ -116,6 +117,11 @@ function FindJobs() {
       const response = await uploadedResumes.getUploadedResume(resumeId)
       setSelectedResume(response.data)
 
+      // Reset filter state when viewing a new resume
+      setMinMatchScore(0)
+      setHasSearchedJobs(false)
+      setScrapedJobs([])
+
       // Load scraped jobs for this resume
       await loadScrapedJobs(resumeId)
     } catch (error) {
@@ -140,10 +146,12 @@ function FindJobs() {
   }
 
 
-  const loadScrapedJobs = async (resumeId) => {
+  const loadScrapedJobs = async (resumeId, minScore = null) => {
     try {
-      const response = await jobSearch.getMatchedJobs(resumeId, { min_score: minMatchScore, limit: 50 })
+      const scoreToUse = minScore !== null ? minScore : minMatchScore
+      const response = await jobSearch.getMatchedJobs(resumeId, { min_score: scoreToUse, limit: 50 })
       setScrapedJobs(response.data)
+      setHasSearchedJobs(true)
     } catch (error) {
       console.error('Failed to load scraped jobs:', error)
       setScrapedJobs([])
@@ -629,7 +637,7 @@ function FindJobs() {
                   )}
 
                   {/* Scraped Jobs Display */}
-                  {scrapedJobs.length > 0 && (
+                  {hasSearchedJobs && (
                     <div className="mt-6">
                       <div className="flex justify-between items-center mb-3">
                         <h4 className="font-medium text-gray-900">
@@ -640,8 +648,9 @@ function FindJobs() {
                           <select
                             value={minMatchScore}
                             onChange={(e) => {
-                              setMinMatchScore(Number(e.target.value))
-                              loadScrapedJobs(selectedResume.id)
+                              const newScore = Number(e.target.value)
+                              setMinMatchScore(newScore)
+                              loadScrapedJobs(selectedResume.id, newScore)
                             }}
                             className="text-xs px-2 py-1 border border-gray-300 rounded"
                           >
@@ -652,8 +661,9 @@ function FindJobs() {
                           </select>
                         </div>
                       </div>
-                      <div className="space-y-3 max-h-96 overflow-y-auto">
-                        {scrapedJobs.map((job) => (
+                      {scrapedJobs.length > 0 ? (
+                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                          {scrapedJobs.map((job) => (
                           <div
                             key={job.id}
                             className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
@@ -779,8 +789,27 @@ function FindJobs() {
                               </svg>
                             </a>
                           </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+                          <svg
+                            className="mx-auto h-12 w-12 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                            />
+                          </svg>
+                          <p className="mt-2 text-sm text-gray-600">No jobs match this filter</p>
+                          <p className="text-xs text-gray-500 mt-1">Try lowering the minimum match score</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

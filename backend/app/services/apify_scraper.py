@@ -122,8 +122,15 @@ class ApifyLinkedInScraper:
 
                 profile_data = dataset_items[0]  # First result is the profile
 
+                # Check if actor returned an error
+                if 'error' in profile_data and profile_data.get('error'):
+                    error_msg = profile_data.get('error')
+                    print(f"⚠️  Actor returned error: {error_msg}")
+                    raise Exception(f"Actor error: {error_msg}")
+
                 # Validate that we got meaningful data
                 if not profile_data.get('fullName') and not profile_data.get('experiences'):
+                    print(f"⚠️  Data validation failed. Available keys: {list(profile_data.keys())[:20]}")
                     raise Exception("Profile data is empty or incomplete")
 
                 print(f"\n✅ SUCCESS with {actor_name}!")

@@ -146,25 +146,19 @@ async def sync_profile_with_apify(
     db: Session = Depends(get_db)
 ):
     """
-    Sync LinkedIn profile using Apify scraper.
-    Requires APIFY_API_TOKEN to be configured.
-    Optionally accepts a LinkedIn profile URL in the request body.
+    Sync LinkedIn profile using Camoufox (with service account) or Apify fallback.
+    Camoufox is more reliable and bypasses LinkedIn detection.
     """
+    from ..services.linkedin_profile_scraper import scrape_linkedin_profile_with_account
+    from ..services.service_account_manager import ServiceAccountManager
     from ..services.apify_scraper import ApifyLinkedInScraper
     from ..core.config import settings
 
     print(f"\n{'='*80}")
-    print(f"APIFY PROFILE SYNC - User: {user.email}")
+    print(f"PROFILE SYNC - User: {user.email}")
     print(f"{'='*80}")
 
     try:
-        # Check if Apify is configured
-        if not settings.APIFY_API_TOKEN:
-            raise HTTPException(
-                status_code=501,
-                detail="Apify is not configured. Please set APIFY_API_TOKEN environment variable."
-            )
-
         # Get or create user's profile
         profile = db.query(LinkedInProfile).filter(LinkedInProfile.user_id == user.id).first()
         if not profile:
@@ -191,53 +185,120 @@ async def sync_profile_with_apify(
 
         print(f"Profile URL: {profile_url}")
 
-        # Initialize Apify scraper
-        scraper = ApifyLinkedInScraper()
+        # Try Method 1: Camoufox with service account (BEST - most reliable)
+        try:
+            print(f"\n🦊 Attempting profile scrape with Camoufox + Service Account...")
 
-        # Scrape profile
-        apify_data = scraper.scrape_profile(profile_url)
-        
-        # Parse and update profile
-        parsed_data = scraper.parse_profile_data(apify_data)
-        
-        # Update profile with scraped data
-        profile.headline = parsed_data.get("headline", profile.headline)
-        profile.summary = parsed_data.get("summary", profile.summary)
-        profile.experiences = parsed_data.get("experiences", [])
-        profile.education = parsed_data.get("education", [])
-        profile.skills = parsed_data.get("skills", [])
-        profile.certifications = parsed_data.get("certifications", [])
-        profile.apify_data = apify_data  # Store raw Apify data
-        profile.last_synced_at = datetime.utcnow()
-        
-        db.commit()
-        
-        print(f"\n✓ Profile synced successfully from Apify!")
-        print(f"   - Headline: {profile.headline}")
-        print(f"   - Experiences: {len(profile.experiences)}")
-        print(f"   - Education: {len(profile.education)}")
-        print(f"   - Skills: {len(profile.skills)}")
-        
-        return {
-            "success": True,
-            "message": "Profile synced successfully from Apify",
-            "profile": {
-                "headline": profile.headline,
-                "summary": profile.summary,
-                "experiences_count": len(profile.experiences),
-                "education_count": len(profile.education),
-                "skills_count": len(profile.skills)
+            # Get available service account
+            email, password = ServiceAccountManager.get_available_account(db)
+
+            print(f"   Using account: {email}")
+
+            # Scrape with Camoufox
+            profile_data = await scrape_linkedin_profile_with_account(
+                profile_url=profile_url,
+                email=email,
+                password=password,
+                headless=True
+            )
+
+            # Note: Account already marked as used by get_available_account()
+
+            # Update profile with scraped data
+            profile.profile_url = profile_data.get("profile_url", profile.profile_url)
+            profile.headline = profile_data.get("headline", profile.headline)
+            profile.summary = profile_data.get("about", profile.summary)
+            profile.experiences = profile_data.get("experiences", [])
+            profile.education = profile_data.get("education", [])
+            profile.skills = profile_data.get("skills", [])
+            profile.raw_data = profile_data
+            profile.last_synced_at = datetime.utcnow()
+
+            db.commit()
+
+            print(f"\n✅ Profile synced successfully with Camoufox!")
+            print(f"   - Name: {profile_data.get('full_name', 'N/A')}")
+            print(f"   - Profile URL: {profile.profile_url}")
+            print(f"   - Location: {profile_data.get('location', 'N/A')}")
+            print(f"   - Headline: {profile.headline}")
+            print(f"   - Experiences: {len(profile.experiences)}")
+            print(f"   - Education: {len(profile.education)}")
+            print(f"   - Skills: {len(profile.skills)}")
+
+            return {
+                "success": True,
+                "message": "Profile synced successfully with Camoufox",
+                "method": "camoufox",
+                "profile": {
+                    "full_name": profile_data.get("full_name", ""),
+                    "profile_url": profile.profile_url,
+                    "location": profile_data.get("location", ""),
+                    "headline": profile.headline,
+                    "summary": profile.summary,
+                    "experiences_count": len(profile.experiences),
+                    "education_count": len(profile.education),
+                    "skills_count": len(profile.skills)
+                }
             }
-        }
-        
+
+        except Exception as camoufox_error:
+            print(f"\n⚠️  Camoufox scraping failed: {str(camoufox_error)}")
+            print(f"🔄 Falling back to Apify...")
+
+            # Fallback Method 2: Apify
+            if not settings.APIFY_API_TOKEN:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Camoufox failed and Apify not configured. Camoufox error: {str(camoufox_error)}"
+                )
+
+            try:
+                scraper = ApifyLinkedInScraper()
+                apify_data = scraper.scrape_profile(profile_url)
+                parsed_data = scraper.parse_profile_data(apify_data)
+
+                # Update profile with scraped data
+                profile.headline = parsed_data.get("headline", profile.headline)
+                profile.summary = parsed_data.get("summary", profile.summary)
+                profile.experiences = parsed_data.get("experiences", [])
+                profile.education = parsed_data.get("education", [])
+                profile.skills = parsed_data.get("skills", [])
+                profile.certifications = parsed_data.get("certifications", [])
+                profile.apify_data = apify_data
+                profile.last_synced_at = datetime.utcnow()
+
+                db.commit()
+
+                print(f"\n✅ Profile synced successfully with Apify fallback!")
+
+                return {
+                    "success": True,
+                    "message": "Profile synced successfully with Apify (fallback)",
+                    "method": "apify",
+                    "profile": {
+                        "headline": profile.headline,
+                        "summary": profile.summary,
+                        "experiences_count": len(profile.experiences),
+                        "education_count": len(profile.education),
+                        "skills_count": len(profile.skills)
+                    }
+                }
+            except Exception as apify_error:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Both methods failed. Camoufox: {str(camoufox_error)}. Apify: {str(apify_error)}"
+                )
+
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"\n❌ Error during Apify sync: {e}")
+        print(f"\n❌ Error during profile sync: {e}")
         import traceback
         traceback.print_exc()
-        
+        db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to sync profile with Apify: {str(e)}"
+            detail=f"Failed to sync profile: {str(e)}"
         )
 
 

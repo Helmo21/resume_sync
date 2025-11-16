@@ -66,12 +66,12 @@ class MatchAnalysis(BaseModel):
 
 class EnhancedContent(BaseModel):
     """Structured output from ContentWriter"""
-    professional_summary: str = Field(description="3-4 sentence professional summary tailored to job, very impactful and quantified")
+    professional_summary: str = Field(description="2-3 SHORT sentence professional summary tailored to job, very impactful and quantified (MAXIMUM 2-3 sentences)")
     job_title_variants: List[str] = Field(description="3-4 job title variants/synonyms for ATS keyword matching (e.g., 'DevOps Engineer | Cloud Engineer | SRE | Platform Engineer')")
-    enhanced_experiences: List[Dict[str, Any]] = Field(description="Enhanced experience descriptions with 4-6 bullet points each (NOT paragraphs). Each experience should have 'title', 'company', 'dates', 'bullets' fields")
+    enhanced_experiences: List[Dict[str, Any]] = Field(description="Enhanced experience descriptions with 2-4 CONCISE bullet points each (NOT paragraphs). Each experience should have 'title', 'company', 'dates', 'bullets' fields")
     skill_descriptions: Dict[str, Any] = Field(description="Enhanced skill descriptions (can be nested by category)")
-    certifications: List[Dict[str, str]] = Field(description="2-3 relevant certifications (existing or suggested as 'In Progress'). Format: name, issuer, date, status")
-    projects: List[Dict[str, Any]] = Field(description="2-3 key projects with technologies and outcomes. Format: name, technologies, description, github_url (optional)")
+    certifications: List[Dict[str, str]] = Field(description="1-2 MOST relevant certifications (existing or suggested as 'In Progress'). Format: name, issuer, date, status")
+    projects: List[Dict[str, Any]] = Field(description="1-2 key projects with technologies and outcomes (OMIT if space constrained). Format: name, technologies, description, github_url (optional)")
     languages: List[Dict[str, str]] = Field(description="Language proficiency. Format: language, proficiency (Native/Fluent/Professional/Basic)")
 
 
@@ -433,22 +433,23 @@ class MatchMakerAgent:
         prompt = ChatPromptTemplate.from_messages([
             ("system", """You are an expert at matching candidate profiles to job requirements.
 
-SELECTION RULES:
+SELECTION RULES - CRITICAL FOR 1-PAGE CONSTRAINT:
 1. Experiences:
    - Latest experience: ALWAYS include (mandatory)
-   - Previous experiences: Include only if skills/responsibilities match the job
-   - Focus on quality over quantity
+   - Previous experiences: Include ONLY if HIGHLY relevant to the job (2-3 total max)
+   - STRICT LIMIT: Maximum 2-3 experiences total (including latest)
+   - Focus on quality over quantity - be VERY selective
 
 2. Education:
-   - INCLUDE ALL EDUCATION ENTRIES (they show progression)
-   - Especially include if from same school (shows continuous education path)
-   - Bachelor → Master from same school is valuable context
+   - Include only MOST RECENT or MOST RELEVANT degree (1-2 max)
+   - If Bachelor → Master from same school, include both
+   - Otherwise prioritize highest/most relevant degree
 
 3. Skills:
    - Priority: Skills matching job requirements first
    - Then complementary relevant skills
-   - Max 10-15 skills total
-   - Everything must fit on 1 page
+   - Max 10-12 skills total
+   - CRITICAL: Everything must fit on 1 page
 
 {format_instructions}"""),
             ("user", """Match this profile to the job:
@@ -582,15 +583,14 @@ Generate:
    - Example: "Software Developer | Full Stack Engineer | Backend Developer"
    - These will be displayed in the header to maximize ATS keyword matches
 
-2. Professional summary (3-4 sentences, VERY IMPACTFUL and QUANTIFIED)
+2. Professional summary (2-3 SHORT SENTENCES MAXIMUM, VERY IMPACTFUL and QUANTIFIED)
    - START with job title variants: "DevOps Engineer | Cloud Engineer | SRE with 4+ years..."
    - Use candidate's summary as a base and enhance it
-   - Include specific numbers, metrics, achievements (e.g., "0 to 100+ cities", "€15M fundraising")
-   - Naturally include key methodologies (Agile, DevSecOps, GitOps, SRE, CI/CD, IaC)
+   - Include ONE specific metric or achievement (e.g., "0 to 100+ cities", "€15M fundraising")
+   - Naturally include 2-3 key methodologies (Agile, DevOps, CI/CD)
    - Highlight expertise and unique value proposition
-   - Show impact on business outcomes
+   - Keep VERY CONCISE - maximum 2-3 sentences
    - Align with target job requirements
-   - End with career aspirations or what you're looking for
 
 3. Enhanced descriptions for each experience - CRITICAL: USE BULLET POINTS, NOT PARAGRAPHS
    ⚠️ **CRITICAL: PRESERVE EXACT VALUES FROM ORIGINAL PROFILE**
@@ -611,7 +611,8 @@ Generate:
    - Copy EXACT location: "Paris, France"
    - ONLY generate NEW content for the "bullets" field
 
-   - For EACH experience, generate 4-6 BULLET POINTS (NOT narrative paragraphs)
+   - For EACH experience, generate 2-4 CONCISE BULLET POINTS (NOT narrative paragraphs)
+   - CRITICAL: For 1-page resumes, prefer 2-3 bullets per experience
    - Start each bullet with a strong ACTION VERB:
      * Creation: Architected, Designed, Developed, Built, Implemented, Created, Engineered
      * Leadership: Led, Spearheaded, Directed, Managed, Coordinated, Drove
@@ -621,7 +622,7 @@ Generate:
    - Include QUANTIFIED METRICS in each bullet (%, numbers, time savings, scale)
    - Mention SPECIFIC TECHNOLOGIES in each bullet
    - Show BUSINESS IMPACT (uptime, cost savings, revenue, efficiency)
-   - Keep bullets concise (1-2 lines max)
+   - Keep bullets VERY concise (1 line max, 2 lines if critical)
    - If description is empty: INFER from title, company, candidate's summary, and target job
 
    Example format (bullets array in each experience) - NOTE: Use EXACT values from input:
@@ -634,20 +635,19 @@ Generate:
      "bullets": [
        "Architected and deployed CI/CD pipelines using Azure DevOps and Jenkins, reducing release cycles by 70%",
        "Managed AWS cloud infrastructure supporting 100+ microservices with 99.99% uptime",
-       "Automated infrastructure provisioning with Terraform and Ansible, cutting deployment time by 75%",
-       "Implemented comprehensive monitoring using Prometheus and Grafana, reducing incident response time by 60%",
-       "Led migration of legacy applications to containerized Kubernetes clusters, improving resource utilization by 40%"
+       "Automated infrastructure provisioning with Terraform and Ansible, cutting deployment time by 75%"
      ]
    }}
 
-4. Certifications (2-3 relevant certifications)
-   - If candidate has certifications in profile, enhance and include them
-   - If missing or insufficient, suggest 2-3 relevant certifications as "In Progress" or "Planned"
-   - Choose certifications that align with target job and candidate's skills
+4. Certifications (1-2 MOST relevant certifications ONLY)
+   - If candidate has certifications in profile, include ONLY the most relevant ones
+   - If missing or insufficient, suggest 1-2 relevant certifications as "In Progress" or "Planned"
+   - Choose certifications that align BEST with target job and candidate's skills
    - Examples: AWS Certified Solutions Architect, CKA, Terraform Associate, Azure Administrator, Google Cloud Professional, etc.
    - Format: {{"name": "AWS Certified Solutions Architect", "issuer": "Amazon Web Services", "date": "2025", "status": "In Progress"}}
 
-5. Projects (2-3 key projects)
+5. Projects (1-2 key projects ONLY - OMIT if space constrained)
+   - ONLY include if critical to the application
    - Infer from work experience what projects the candidate likely worked on
    - OR suggest relevant projects based on their skills and target job
    - Include specific technologies used
@@ -742,9 +742,11 @@ class ReviewerAgent:
 
 VALIDATION CHECKS:
 1. Coherence: No false dates, no invented experiences
-2. Length: Must fit on 1 page (rough estimate: ~500-600 words max)
+2. Length: MUST fit on 1 page (STRICT: ~450-500 words max, including all sections)
 3. Quality: Professional, tailored, ATS-optimized
 4. Authenticity: Experience claims match original profile
+
+CRITICAL: Be STRICT about length. If word count exceeds 500, mark length_check as FALSE.
 
 {format_instructions}"""),
             ("user", """Review this resume:
@@ -782,8 +784,8 @@ Verify:
         response = self.llm.invoke(messages)
         review = self.parser.parse(response.content)
 
-        # Override length check based on word count
-        review.length_check = word_count <= 600
+        # Override length check based on word count (STRICT: 500 words max for 1-page fit)
+        review.length_check = word_count <= 500
 
         return review
 

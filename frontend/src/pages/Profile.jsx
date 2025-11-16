@@ -8,22 +8,10 @@ function Profile() {
   const { user } = useAuth()
   const [profileData, setProfileData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
-
-  // Form state
-  const [formData, setFormData] = useState({
-    headline: '',
-    summary: '',
-    email: '',
-    phone: '',
-    location: '',
-    profile_url: '',
-    experiences: [],
-    education: [],
-    skills: []
-  })
+  const [showSyncModal, setShowSyncModal] = useState(false)
+  const [syncUrl, setSyncUrl] = useState('')
 
   useEffect(() => {
     fetchProfile()
@@ -33,19 +21,6 @@ function Profile() {
     try {
       const response = await profile.getMyProfile()
       setProfileData(response.data)
-
-      // Initialize form with existing data
-      setFormData({
-        headline: response.data.headline || '',
-        summary: response.data.summary || '',
-        email: user?.email || '',
-        phone: '',
-        location: '',
-        profile_url: '',
-        experiences: response.data.experiences || [],
-        education: response.data.education || [],
-        skills: response.data.skills || []
-      })
     } catch (error) {
       console.error('Failed to fetch profile:', error)
       showMessage('error', 'Failed to load profile data')
@@ -59,43 +34,28 @@ function Profile() {
     setTimeout(() => setMessage({ type: '', text: '' }), 5000)
   }
 
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      await profile.updateProfile(formData)
-      showMessage('success', 'Profile updated successfully!')
-      await fetchProfile()
-    } catch (error) {
-      console.error('Failed to update profile:', error)
-      showMessage('error', 'Failed to update profile')
-    } finally {
-      setSaving(false)
-    }
+  const handleSyncProfile = () => {
+    setSyncUrl(profileData?.profile_url || '')
+    setShowSyncModal(true)
   }
 
-  const handleSyncProfile = async () => {
-    // Ask for LinkedIn profile URL if not already set
-    let linkedinUrl = formData.profile_url
-
-    if (!linkedinUrl) {
-      linkedinUrl = prompt('Please enter your LinkedIn profile URL:\n(e.g., https://www.linkedin.com/in/yourname)')
-
-      if (!linkedinUrl) {
-        showMessage('error', 'LinkedIn profile URL is required')
-        return
-      }
-
-      // Basic validation
-      if (!linkedinUrl.includes('linkedin.com/in/')) {
-        showMessage('error', 'Please enter a valid LinkedIn profile URL')
-        return
-      }
+  const handleSyncSubmit = async () => {
+    if (!syncUrl) {
+      showMessage('error', 'LinkedIn profile URL is required')
+      return
     }
 
+    if (!syncUrl.includes('linkedin.com/in/')) {
+      showMessage('error', 'Please enter a valid LinkedIn profile URL')
+      return
+    }
+
+    setShowSyncModal(false)
     setSyncing(true)
     showMessage('info', 'Starting profile sync from LinkedIn... This may take up to 3 minutes.')
+
     try {
-      await profile.syncWithApify({ profile_url: linkedinUrl })
+      await profile.syncWithApify({ profile_url: syncUrl })
       showMessage('success', 'Profile synced successfully from LinkedIn!')
       await fetchProfile()
     } catch (error) {
@@ -104,63 +64,6 @@ function Profile() {
     } finally {
       setSyncing(false)
     }
-  }
-
-  const addExperience = () => {
-    setFormData({
-      ...formData,
-      experiences: [
-        ...formData.experiences,
-        { title: '', company: '', start_date: '', end_date: '', description: '' }
-      ]
-    })
-  }
-
-  const updateExperience = (index, field, value) => {
-    const updated = [...formData.experiences]
-    updated[index][field] = value
-    setFormData({ ...formData, experiences: updated })
-  }
-
-  const removeExperience = (index) => {
-    const updated = formData.experiences.filter((_, i) => i !== index)
-    setFormData({ ...formData, experiences: updated })
-  }
-
-  const addEducation = () => {
-    setFormData({
-      ...formData,
-      education: [
-        ...formData.education,
-        { school: '', degree: '', field_of_study: '', graduation_year: '' }
-      ]
-    })
-  }
-
-  const updateEducation = (index, field, value) => {
-    const updated = [...formData.education]
-    updated[index][field] = value
-    setFormData({ ...formData, education: updated })
-  }
-
-  const removeEducation = (index) => {
-    const updated = formData.education.filter((_, i) => i !== index)
-    setFormData({ ...formData, education: updated })
-  }
-
-  const addSkill = () => {
-    const skillInput = prompt('Enter a skill:')
-    if (skillInput && skillInput.trim()) {
-      setFormData({
-        ...formData,
-        skills: [...formData.skills, skillInput.trim()]
-      })
-    }
-  }
-
-  const removeSkill = (index) => {
-    const updated = formData.skills.filter((_, i) => i !== index)
-    setFormData({ ...formData, skills: updated })
   }
 
   if (loading) {
@@ -211,312 +114,214 @@ function Profile() {
           </div>
         )}
 
-        {/* Sync Options */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Sync Your Profile from LinkedIn</h2>
-          <p className="text-gray-600 mb-4">
-            Automatically import your complete LinkedIn profile data including work experience, education, and skills.
-          </p>
-          <button
-            onClick={handleSyncProfile}
-            disabled={syncing}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-4 rounded-lg font-medium transition-colors"
-          >
-            {syncing ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                Syncing from LinkedIn... (This may take up to 3 minutes)
-              </>
-            ) : (
-              <>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Sync from LinkedIn
-              </>
-            )}
-          </button>
-          <p className="text-sm text-gray-500 mt-3">
-            We use advanced scraping technology with automatic retries to ensure reliable data import.
+        {/* Sync Profile Card */}
+        <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">LinkedIn Profile</h2>
+              {profileData && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Last synced: {new Date(profileData.last_synced_at).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleSyncProfile}
+              disabled={syncing}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors"
+            >
+              {syncing ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Sync from LinkedIn
+                </>
+              )}
+            </button>
+          </div>
+          <p className="text-gray-600 text-sm">
+            Click the button above to automatically import or update your LinkedIn profile data.
           </p>
         </div>
 
-        {/* Manual Edit Form */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Or Edit Manually</h2>
+        {/* Profile Data Display */}
+        {profileData ? (
+          <div className="bg-white rounded-xl shadow-lg p-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Profile Data</h2>
 
-          {/* Basic Info */}
-          <div className="space-y-4 mb-8">
-            <h3 className="text-lg font-medium text-gray-900">Basic Information</h3>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Professional Headline
-              </label>
-              <input
-                type="text"
-                value={formData.headline}
-                onChange={(e) => setFormData({ ...formData, headline: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., Senior Software Engineer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Summary
-              </label>
-              <textarea
-                value={formData.summary}
-                onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
-                rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Brief professional summary..."
-              />
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+            {/* Headline & Summary */}
+            {profileData.headline && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Professional Headline</h3>
+                <p className="text-gray-900">{profileData.headline}</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="+1 (555) 123-4567"
-                />
+            )}
+
+            {profileData.summary && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Summary</h3>
+                <p className="text-gray-700 whitespace-pre-line">{profileData.summary}</p>
               </div>
+            )}
+
+            {/* Experience */}
+            {profileData.experiences && profileData.experiences.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Experience ({profileData.experiences.length})
+                </h3>
+                <div className="space-y-4">
+                  {profileData.experiences.map((exp, index) => (
+                    <div key={index} className="border-l-2 border-gray-200 pl-4">
+                      <p className="font-semibold text-gray-900">{exp.title || exp.position || 'Position'}</p>
+                      <p className="text-sm text-gray-600">{exp.company}</p>
+                      <p className="text-xs text-gray-500">
+                        {exp.start_date || exp.startDate} - {exp.end_date || exp.endDate || 'Present'}
+                      </p>
+                      {exp.description && (
+                        <p className="text-sm text-gray-700 mt-2">{exp.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Education */}
+            {profileData.education && profileData.education.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                  </svg>
+                  Education ({profileData.education.length})
+                </h3>
+                <div className="space-y-3">
+                  {profileData.education.map((edu, index) => (
+                    <div key={index} className="border-l-2 border-gray-200 pl-4">
+                      <p className="font-semibold text-gray-900">{edu.degree || edu.fieldOfStudy}</p>
+                      <p className="text-sm text-gray-600">{edu.school || edu.schoolName}</p>
+                      {edu.graduation_year && (
+                        <p className="text-xs text-gray-500">Graduated: {edu.graduation_year}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Skills */}
+            {profileData.skills && profileData.skills.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                  Skills ({profileData.skills.length})
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {profileData.skills.map((skill, index) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
+                    >
+                      {typeof skill === 'string' ? skill : skill.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(!profileData.experiences || profileData.experiences.length === 0) &&
+             (!profileData.education || profileData.education.length === 0) &&
+             (!profileData.skills || profileData.skills.length === 0) && (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No profile data found. Click "Sync from LinkedIn" to import your profile.</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-6 rounded-lg">
+            <p className="text-yellow-800 font-semibold mb-2">No profile data found</p>
+            <p className="text-yellow-700 text-sm">
+              Click "Sync from LinkedIn" above to import your profile data.
+            </p>
+          </div>
+        )}
+      </main>
+
+      {/* Sync Profile Modal */}
+      {showSyncModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Sync from LinkedIn</h2>
+              <p className="text-gray-600">
+                Enter your LinkedIn profile URL to automatically import your complete profile data.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Location
-              </label>
-              <input
-                type="text"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., San Francisco, CA"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 LinkedIn Profile URL
               </label>
               <input
                 type="url"
-                value={formData.profile_url}
-                onChange={(e) => setFormData({ ...formData, profile_url: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={syncUrl}
+                onChange={(e) => setSyncUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSyncSubmit()}
                 placeholder="https://www.linkedin.com/in/yourname"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoFocus
               />
-            </div>
-          </div>
-
-          {/* Work Experience */}
-          <div className="space-y-4 mb-8">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">Work Experience</h3>
-              <button
-                onClick={addExperience}
-                className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-              >
-                + Add Experience
-              </button>
+              <p className="mt-2 text-sm text-gray-500">
+                Example: https://www.linkedin.com/in/antoine-pedretti-997ab2205/
+              </p>
             </div>
 
-            {formData.experiences.map((exp, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <h4 className="font-medium text-gray-900">Experience {index + 1}</h4>
-                  <button
-                    onClick={() => removeExperience(index)}
-                    className="text-red-600 hover:text-red-700 text-sm"
-                  >
-                    Remove
-                  </button>
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
                 </div>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={exp.title || ''}
-                    onChange={(e) => updateExperience(index, 'title', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="Job Title"
-                  />
-                  <input
-                    type="text"
-                    value={exp.company || ''}
-                    onChange={(e) => updateExperience(index, 'company', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="Company Name"
-                  />
-                  <div className="grid grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      value={exp.start_date || ''}
-                      onChange={(e) => updateExperience(index, 'start_date', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      placeholder="Start Date (MM/YYYY)"
-                    />
-                    <input
-                      type="text"
-                      value={exp.end_date || ''}
-                      onChange={(e) => updateExperience(index, 'end_date', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      placeholder="End Date (MM/YYYY or Present)"
-                    />
-                  </div>
-                  <textarea
-                    value={exp.description || ''}
-                    onChange={(e) => updateExperience(index, 'description', e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="Description of your role and achievements..."
-                  />
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    This process may take up to 3 minutes. We'll scrape your public LinkedIn data using our service accounts.
+                  </p>
                 </div>
               </div>
-            ))}
+            </div>
 
-            {formData.experiences.length === 0 && (
-              <p className="text-gray-500 text-sm italic">
-                No work experience added yet. Click "Add Experience" to get started.
-              </p>
-            )}
-          </div>
-
-          {/* Education */}
-          <div className="space-y-4 mb-8">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">Education</h3>
+            <div className="flex gap-3">
               <button
-                onClick={addEducation}
-                className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                onClick={() => setShowSyncModal(false)}
+                className="flex-1 px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
               >
-                + Add Education
+                Cancel
+              </button>
+              <button
+                onClick={handleSyncSubmit}
+                disabled={!syncUrl}
+                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors"
+              >
+                Start Sync
               </button>
             </div>
-
-            {formData.education.map((edu, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <h4 className="font-medium text-gray-900">Education {index + 1}</h4>
-                  <button
-                    onClick={() => removeEducation(index)}
-                    className="text-red-600 hover:text-red-700 text-sm"
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={edu.school || ''}
-                    onChange={(e) => updateEducation(index, 'school', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="School/University Name"
-                  />
-                  <input
-                    type="text"
-                    value={edu.degree || ''}
-                    onChange={(e) => updateEducation(index, 'degree', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="Degree (e.g., Bachelor of Science)"
-                  />
-                  <input
-                    type="text"
-                    value={edu.field_of_study || ''}
-                    onChange={(e) => updateEducation(index, 'field_of_study', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="Field of Study"
-                  />
-                  <input
-                    type="text"
-                    value={edu.graduation_year || ''}
-                    onChange={(e) => updateEducation(index, 'graduation_year', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="Graduation Year"
-                  />
-                </div>
-              </div>
-            ))}
-
-            {formData.education.length === 0 && (
-              <p className="text-gray-500 text-sm italic">
-                No education added yet. Click "Add Education" to get started.
-              </p>
-            )}
-          </div>
-
-          {/* Skills */}
-          <div className="space-y-4 mb-8">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">Skills</h3>
-              <button
-                onClick={addSkill}
-                className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-              >
-                + Add Skill
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {formData.skills.map((skill, index) => (
-                <span
-                  key={index}
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
-                >
-                  {typeof skill === 'string' ? skill : skill.name}
-                  <button
-                    onClick={() => removeSkill(index)}
-                    className="text-gray-500 hover:text-red-600"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-
-            {formData.skills.length === 0 && (
-              <p className="text-gray-500 text-sm italic">
-                No skills added yet. Click "Add Skill" to get started.
-              </p>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors"
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
           </div>
         </div>
-      </main>
+      )}
     </div>
   )
 }

@@ -10,6 +10,10 @@ function Dashboard() {
   const [scrapedJobs, setScrapedJobs] = useState([])
   const [recentResumes, setRecentResumes] = useState([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [showSyncModal, setShowSyncModal] = useState(false)
+  const [syncUrl, setSyncUrl] = useState('')
+  const [message, setMessage] = useState({ type: '', text: '' })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,6 +49,46 @@ function Dashboard() {
     }
   }, [user])
 
+  const showMessage = (type, text) => {
+    setMessage({ type, text })
+    setTimeout(() => setMessage({ type: '', text: '' }), 5000)
+  }
+
+  const handleSyncProfile = () => {
+    setSyncUrl(profileData?.profile_url || '')
+    setShowSyncModal(true)
+  }
+
+  const handleSyncSubmit = async () => {
+    if (!syncUrl) {
+      showMessage('error', 'LinkedIn profile URL is required')
+      return
+    }
+
+    if (!syncUrl.includes('linkedin.com/in/')) {
+      showMessage('error', 'Please enter a valid LinkedIn profile URL')
+      return
+    }
+
+    setShowSyncModal(false)
+    setSyncing(true)
+    showMessage('info', 'Starting profile sync from LinkedIn... This may take up to 3 minutes.')
+
+    try {
+      await profile.syncWithApify({ profile_url: syncUrl })
+      showMessage('success', 'Profile synced successfully from LinkedIn!')
+
+      // Refresh profile data
+      const profileResponse = await profile.getMyProfile()
+      setProfileData(profileResponse.data)
+    } catch (error) {
+      console.error('Failed to sync profile:', error)
+      showMessage('error', error.response?.data?.detail || 'Failed to sync profile. Please try again.')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -65,6 +109,21 @@ function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Message Banner */}
+        {message.text && (
+          <div
+            className={`mb-6 p-4 rounded-lg ${
+              message.type === 'success'
+                ? 'bg-green-50 border-l-4 border-green-400 text-green-700'
+                : message.type === 'error'
+                ? 'bg-red-50 border-l-4 border-red-400 text-red-700'
+                : 'bg-blue-50 border-l-4 border-blue-400 text-blue-700'
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
+
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold text-gray-900 mb-4">
             Welcome to ResumeSync
@@ -266,10 +325,23 @@ function Dashboard() {
                   Last synced: {new Date(profileData.last_synced_at).toLocaleDateString()}
                 </span>
                 <button
-                  onClick={() => navigate('/profile')}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  onClick={handleSyncProfile}
+                  disabled={syncing}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
                 >
-                  Edit Profile
+                  {syncing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Sync Profile
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -285,12 +357,12 @@ function Dashboard() {
                   </div>
                   <div className="ml-3">
                     <p className="text-sm text-yellow-700">
-                      Your profile is incomplete. Add your work experience and education to generate better resumes.
+                      Your profile is incomplete. Sync your LinkedIn profile to import your work experience and education.
                       <button
-                        onClick={() => navigate('/profile')}
+                        onClick={handleSyncProfile}
                         className="ml-2 font-medium underline hover:text-yellow-800"
                       >
-                        Complete profile
+                        Sync now
                       </button>
                     </p>
                   </div>
@@ -408,16 +480,79 @@ function Dashboard() {
                   Your LinkedIn profile data is empty. Please sync your profile to enable resume generation.
                 </p>
                 <button
-                  onClick={() => navigate('/profile')}
+                  onClick={handleSyncProfile}
                   className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
                 >
-                  Complete Your Profile
+                  Sync Your Profile
                 </button>
               </div>
             </div>
           </div>
         )}
       </main>
+
+      {/* Sync Profile Modal */}
+      {showSyncModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Sync from LinkedIn</h2>
+              <p className="text-gray-600">
+                Enter your LinkedIn profile URL to automatically import your complete profile data.
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                LinkedIn Profile URL
+              </label>
+              <input
+                type="url"
+                value={syncUrl}
+                onChange={(e) => setSyncUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSyncSubmit()}
+                placeholder="https://www.linkedin.com/in/yourname"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoFocus
+              />
+              <p className="mt-2 text-sm text-gray-500">
+                Example: https://www.linkedin.com/in/antoine-pedretti-997ab2205/
+              </p>
+            </div>
+
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    This process may take up to 3 minutes. We'll scrape your public LinkedIn data using our service accounts.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowSyncModal(false)}
+                className="flex-1 px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSyncSubmit}
+                disabled={!syncUrl}
+                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors"
+              >
+                Start Sync
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

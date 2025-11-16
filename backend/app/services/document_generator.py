@@ -198,68 +198,68 @@ class ATSTemplateGenerator:
     def _generate_modern_pdf(self, resume_data: Dict, output_path: str) -> str:
         """Generate modern professional PDF matching high-quality reference design (1 page optimized)"""
         doc = SimpleDocTemplate(output_path, pagesize=letter,
-                                rightMargin=0.5*inch, leftMargin=0.5*inch,
-                                topMargin=0.5*inch, bottomMargin=0.5*inch)
+                                rightMargin=0.4*inch, leftMargin=0.4*inch,
+                                topMargin=0.4*inch, bottomMargin=0.4*inch)
 
         story = []
         styles = getSampleStyleSheet()
 
-        # Custom styles - Compact & Professional
+        # Custom styles - Compact & Professional (optimized for 1-page)
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=22,
+            fontSize=20,
             textColor=colors.HexColor('#000000'),
-            spaceAfter=3,
+            spaceAfter=2,
             alignment=TA_LEFT,
             fontName='Helvetica-Bold',
-            leading=26
+            leading=23
         )
 
         subtitle_style = ParagraphStyle(
             'SubtitleStyle',
             parent=styles['Normal'],
-            fontSize=10,
+            fontSize=9,
             textColor=colors.HexColor('#555555'),
-            spaceAfter=6,
+            spaceAfter=4,
             alignment=TA_LEFT,
             fontName='Helvetica-Oblique',
-            leading=12
+            leading=11
         )
 
         heading_style = ParagraphStyle(
             'CustomHeading',
             parent=styles['Heading2'],
-            fontSize=10,
+            fontSize=9,
             textColor=colors.HexColor('#000000'),
-            spaceAfter=4,
-            spaceBefore=10,
+            spaceAfter=3,
+            spaceBefore=6,
             fontName='Helvetica-Bold',
-            leading=12,
+            leading=11,
             borderWidth=0,
             borderPadding=0,
             leftIndent=0
         )
 
-        # Header styles for contact info
+        # Header styles for contact info (optimized for 1-page)
         contact_style = ParagraphStyle(
             'ContactStyle',
             parent=styles['Normal'],
-            fontSize=9,
+            fontSize=8,
             textColor=colors.HexColor('#555555'),
-            spaceAfter=3,
+            spaceAfter=2,
             alignment=TA_RIGHT,
-            leading=11
+            leading=10
         )
 
         body_style = ParagraphStyle(
             'BodyStyle',
             parent=styles['Normal'],
-            fontSize=9,
+            fontSize=8.5,
             textColor=colors.HexColor('#333333'),
-            spaceAfter=4,
+            spaceAfter=2,
             alignment=TA_JUSTIFY,
-            leading=11
+            leading=10
         )
 
         job_title_style = ParagraphStyle(
@@ -267,9 +267,9 @@ class ATSTemplateGenerator:
             parent=styles['Normal'],
             fontSize=9,
             textColor=colors.HexColor('#000000'),
-            spaceAfter=2,
+            spaceAfter=1,
             fontName='Helvetica-Bold',
-            leading=11
+            leading=10
         )
 
         job_meta_style = ParagraphStyle(
@@ -277,9 +277,9 @@ class ATSTemplateGenerator:
             parent=styles['Normal'],
             fontSize=8,
             textColor=colors.HexColor('#666666'),
-            spaceAfter=3,
+            spaceAfter=2,
             fontName='Helvetica-Oblique',
-            leading=10
+            leading=9
         )
 
         # Header avec nom, titre et contact infos alignés
@@ -349,28 +349,28 @@ class ATSTemplateGenerator:
             for item in left_column:
                 story.append(item)
 
-        # Horizontal separator line after header
-        story.append(Spacer(1, 0.05*inch))
+        # Horizontal separator line after header (reduced spacing)
+        story.append(Spacer(1, 0.03*inch))
         separator = Table([['']], colWidths=[7.5*inch])
         separator.setStyle(TableStyle([
             ('LINEABOVE', (0, 0), (-1, -1), 1.5, colors.HexColor('#000000')),
         ]))
         story.append(separator)
-        story.append(Spacer(1, 0.08*inch))
+        story.append(Spacer(1, 0.05*inch))
 
         # Professional Summary
         if resume_data.get('professional_summary'):
             story.append(Paragraph("<i>PROFESSIONAL SUMMARY</i>", heading_style))
-            story.append(Spacer(1, 0.04*inch))
+            story.append(Spacer(1, 0.02*inch))
 
             summary_text = resume_data['professional_summary']
             story.append(Paragraph(summary_text, body_style))
-            story.append(Spacer(1, 0.08*inch))
+            story.append(Spacer(1, 0.05*inch))
 
-        # Work Experience
+        # Work Experience (reduced spacing for 1-page)
         if resume_data.get('work_experience'):
             story.append(Paragraph("<i>WORK HISTORY</i>", heading_style))
-            story.append(Spacer(1, 0.04*inch))
+            story.append(Spacer(1, 0.02*inch))
 
             for i, exp in enumerate(resume_data['work_experience']):
                 # Job title and dates on same line
@@ -396,7 +396,7 @@ class ATSTemplateGenerator:
 
                 # Bullets (NEW format from ContentWriter) - priority
                 if exp.get('bullets'):
-                    story.append(Spacer(1, 0.02*inch))
+                    story.append(Spacer(1, 0.01*inch))
                     for bullet in exp['bullets']:
                         bullet_text = f"• {bullet}"
                         story.append(Paragraph(bullet_text, body_style))
@@ -404,22 +404,22 @@ class ATSTemplateGenerator:
                 # Description as narrative paragraph (fallback for old format)
                 elif exp.get('description'):
                     description = exp['description']
-                    story.append(Spacer(1, 0.02*inch))
+                    story.append(Spacer(1, 0.01*inch))
                     story.append(Paragraph(description, body_style))
 
                 # Achievements as bullet points (fallback)
                 elif exp.get('achievements'):
-                    story.append(Spacer(1, 0.02*inch))
+                    story.append(Spacer(1, 0.01*inch))
                     for achievement in exp['achievements']:
                         bullet_text = f"• {achievement}"
                         story.append(Paragraph(bullet_text, body_style))
 
-                story.append(Spacer(1, 0.08*inch))
+                story.append(Spacer(1, 0.04*inch))
 
-        # Skills Section - Two Column Layout (matching reference template)
+        # Skills Section (reduced spacing for 1-page)
         if resume_data.get('skills'):
             story.append(Paragraph("<i>SKILLS</i>", heading_style))
-            story.append(Spacer(1, 0.04*inch))
+            story.append(Spacer(1, 0.02*inch))
 
             skills_dict = resume_data['skills']
 
@@ -456,18 +456,18 @@ class ATSTemplateGenerator:
                 for skill in skills_list:
                     skill_items.append(Paragraph(f"• {skill}", body_style))
 
-            # Display skills in single column with spacing between each category
+            # Display skills in single column with minimal spacing
             for item in skill_items:
                 story.append(item)
-                # Add small spacing after each skill category for readability
-                story.append(Spacer(1, 0.04*inch))
+                # Minimal spacing after each skill category
+                story.append(Spacer(1, 0.02*inch))
 
-            story.append(Spacer(1, 0.12*inch))
+            story.append(Spacer(1, 0.05*inch))
 
-        # Education (Formation) - matching reference template format
+        # Education (Formation) - reduced spacing for 1-page
         if resume_data.get('education'):
             story.append(Paragraph("<i>FORMATION</i>", heading_style))
-            story.append(Spacer(1, 0.04*inch))
+            story.append(Spacer(1, 0.02*inch))
 
             for edu in resume_data['education']:
                 degree = edu.get('degree', 'N/A')
@@ -498,12 +498,12 @@ class ATSTemplateGenerator:
                 if date_range:
                     story.append(Paragraph(f"<i>{date_range}</i>", job_meta_style))
 
-                story.append(Spacer(1, 0.06*inch))
+                story.append(Spacer(1, 0.03*inch))
 
-        # Certifications Section (NEW/Enhanced)
+        # Certifications Section (reduced spacing for 1-page)
         if resume_data.get('certifications'):
             story.append(Paragraph("<i>CERTIFICATIONS</i>", heading_style))
-            story.append(Spacer(1, 0.04*inch))
+            story.append(Spacer(1, 0.02*inch))
 
             for cert in resume_data['certifications']:
                 if isinstance(cert, dict):
@@ -526,12 +526,12 @@ class ATSTemplateGenerator:
                 else:
                     story.append(Paragraph(f"• {str(cert)}", body_style))
 
-            story.append(Spacer(1, 0.08*inch))
+            story.append(Spacer(1, 0.04*inch))
 
-        # Projects Section (NEW)
+        # Projects Section (reduced spacing for 1-page)
         if resume_data.get('projects'):
             story.append(Paragraph("<i>PROJECTS</i>", heading_style))
-            story.append(Spacer(1, 0.04*inch))
+            story.append(Spacer(1, 0.02*inch))
 
             for project in resume_data['projects']:
                 if isinstance(project, dict):
@@ -556,12 +556,12 @@ class ATSTemplateGenerator:
                     if github_url:
                         story.append(Paragraph(f"<i>{github_url}</i>", job_meta_style))
 
-                    story.append(Spacer(1, 0.06*inch))
+                    story.append(Spacer(1, 0.03*inch))
 
-        # Languages Section (NEW)
+        # Languages Section (reduced spacing for 1-page)
         if resume_data.get('languages'):
             story.append(Paragraph("<i>LANGUAGES</i>", heading_style))
-            story.append(Spacer(1, 0.04*inch))
+            story.append(Spacer(1, 0.02*inch))
 
             language_items = []
             for lang in resume_data['languages']:

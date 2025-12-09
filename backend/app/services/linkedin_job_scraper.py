@@ -104,16 +104,24 @@ class LinkedInJobScraper:
         keywords: List[str],
         location: Optional[str] = None,
         remote_only: bool = False,
-        max_results: int = 20
+        max_results: int = 100,  # Increased from 20 to 100
+        date_posted: str = 'week',  # 'day', 'week', 'month', 'any'
+        experience_level: Optional[str] = None,  # 'entry', 'mid', 'senior', 'director', 'executive'
+        job_type: Optional[str] = None,  # 'full_time', 'part_time', 'contract', 'temporary'
+        sort_by: str = 'date'  # 'date' or 'relevance'
     ) -> List[Dict]:
         """
-        Search for jobs on LinkedIn.
+        Search for jobs on LinkedIn with advanced filters.
 
         Args:
             keywords: Search keywords (from resume analysis)
             location: Location filter
             remote_only: Only show remote jobs
             max_results: Maximum number of jobs to scrape
+            date_posted: Filter by posting date ('day', 'week', 'month', 'any')
+            experience_level: Filter by experience level
+            job_type: Filter by employment type
+            sort_by: Sort results by 'date' or 'relevance'
 
         Returns:
             List of job dictionaries
@@ -130,14 +138,16 @@ class LinkedInJobScraper:
             # Build search query
             search_query = ' OR '.join(keywords[:5])  # Limit to top 5 keywords
 
-            # Navigate to LinkedIn jobs search
-            search_url = f'https://www.linkedin.com/jobs/search/?keywords={search_query}'
-
-            if location:
-                search_url += f'&location={location}'
-
-            if remote_only:
-                search_url += '&f_WT=2'  # LinkedIn remote filter
+            # Build LinkedIn search URL with advanced filters
+            search_url = self._build_search_url(
+                keywords=search_query,
+                location=location,
+                remote_only=remote_only,
+                date_posted=date_posted,
+                experience_level=experience_level,
+                job_type=job_type,
+                sort_by=sort_by
+            )
 
             print(f"🔍 Searching: {search_url}")
             self.driver.get(search_url)
@@ -230,14 +240,140 @@ class LinkedInJobScraper:
         except Exception as e:
             raise Exception(f"Job search failed: {str(e)}")
 
+    def _build_search_url(
+        self,
+        keywords: str,
+        location: Optional[str] = None,
+        remote_only: bool = False,
+        date_posted: str = 'week',
+        experience_level: Optional[str] = None,
+        job_type: Optional[str] = None,
+        sort_by: str = 'date'
+    ) -> str:
+        """
+        Build LinkedIn search URL with advanced filters.
+
+        LinkedIn Filter Codes:
+        - f_TPR: Time Posted Recently
+          - r86400 = past 24 hours
+          - r604800 = past week
+          - r2592000 = past month
+        - f_E: Experience Level
+          - 1 = Internship
+          - 2 = Entry level
+          - 3 = Associate
+          - 4 = Mid-Senior level
+          - 5 = Director
+          - 6 = Executive
+        - f_JT: Job Type
+          - F = Full-time
+          - P = Part-time
+          - C = Contract
+          - T = Temporary
+          - I = Internship
+          - V = Volunteer
+          - O = Other
+        - f_WT: Workplace Type
+          - 1 = On-site
+          - 2 = Remote
+          - 3 = Hybrid
+        - sortBy: Sort order
+          - DD = Date Descending (most recent)
+          - R = Relevance
+        """
+        from urllib.parse import quote
+
+        base_url = 'https://www.linkedin.com/jobs/search/'
+        params = []
+
+        # Keywords
+        if keywords:
+            params.append(f'keywords={quote(keywords)}')
+
+        # Location
+        if location:
+            params.append(f'location={quote(location)}')
+
+        # Date posted filter
+        date_filters = {
+            'day': 'r86400',
+            'week': 'r604800',
+            'month': 'r2592000',
+            'any': ''
+        }
+        if date_posted in date_filters and date_filters[date_posted]:
+            params.append(f'f_TPR={date_filters[date_posted]}')
+
+        # Experience level filter
+        experience_filters = {
+            'entry': '2',
+            'associate': '3',
+            'mid': '3,4',
+            'senior': '4,5',
+            'director': '5',
+            'executive': '6'
+        }
+        if experience_level and experience_level in experience_filters:
+            params.append(f'f_E={experience_filters[experience_level]}')
+
+        # Job type filter
+        job_type_filters = {
+            'full_time': 'F',
+            'part_time': 'P',
+            'contract': 'C',
+            'temporary': 'T',
+            'internship': 'I'
+        }
+        if job_type and job_type in job_type_filters:
+            params.append(f'f_JT={job_type_filters[job_type]}')
+
+        # Remote/Workplace type
+        if remote_only:
+            params.append('f_WT=2')
+
+        # Sort by
+        if sort_by == 'date':
+            params.append('sortBy=DD')
+        elif sort_by == 'relevance':
+            params.append('sortBy=R')
+
+        # Combine all parameters
+        url = f"{base_url}?{'&'.join(params)}"
+        return url
+
     def _scroll_to_load_jobs(self):
         """Scroll down to trigger lazy loading of more jobs"""
         try:
-            for _ in range(3):  # Scroll 3 times
+            print("📜 Scrolling to load more jobs...")
+            last_height = self.driver.execute_script("return document.body.scrollHeight")
+
+            for scroll_num in range(8):  # Increased from 3 to 8 scrolls
+                # Scroll to bottom
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(1)
-        except Exception:
-            pass
+                time.sleep(2)  # Increased wait time from 1s to 2s
+
+                # Check if new content loaded
+                new_height = self.driver.execute_script("return document.body.scrollHeight")
+
+                if new_height == last_height:
+                    # No new content, try clicking "Show more" button if exists
+                    try:
+                        show_more_buttons = self.driver.find_elements(
+                            By.CSS_SELECTOR,
+                            'button.infinite-scroller__show-more-button, button[aria-label*="Show more"], button.scaffold-finite-scroll__load-button'
+                        )
+                        if show_more_buttons:
+                            show_more_buttons[0].click()
+                            print(f"  ✓ Clicked 'Show more' button")
+                            time.sleep(3)  # Wait for new jobs to load
+                    except Exception:
+                        pass
+
+                last_height = new_height
+                print(f"  ✓ Scroll {scroll_num + 1}/8 complete")
+
+        except Exception as e:
+            print(f"⚠️  Scrolling error: {e}")
 
     def _extract_job_data(self, card_element, index: int) -> Optional[Dict]:
         """

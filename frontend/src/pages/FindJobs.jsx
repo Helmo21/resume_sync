@@ -20,8 +20,6 @@ function FindJobs() {
   const [searchingJobs, setSearchingJobs] = useState(false)
   const [searchLocation, setSearchLocation] = useState('')
   const [searchRemoteOnly, setSearchRemoteOnly] = useState(false)
-  const [searchTaskId, setSearchTaskId] = useState(null)
-  const [searchStatus, setSearchStatus] = useState(null)
   const [minMatchScore, setMinMatchScore] = useState(0)
   const [hasSearchedJobs, setHasSearchedJobs] = useState(false)
 
@@ -148,8 +146,7 @@ function FindJobs() {
 
   const loadScrapedJobs = async (resumeId, minScore = null) => {
     try {
-      const scoreToUse = minScore !== null ? minScore : minMatchScore
-      const response = await jobSearch.getMatchedJobs(resumeId, { min_score: scoreToUse, limit: 50 })
+      const response = await jobSearch.getScrapedJobs(resumeId)
       setScrapedJobs(response.data)
       setHasSearchedJobs(true)
     } catch (error) {
@@ -158,81 +155,26 @@ function FindJobs() {
     }
   }
 
-  const pollSearchStatus = async (taskId, resumeId) => {
-    const maxAttempts = 60 // 5 minutes max (60 * 5s = 300s)
-    let attempts = 0
-
-    const poll = async () => {
-      try {
-        const response = await jobSearch.getSearchStatus(taskId)
-        const status = response.data.status
-        const result = response.data.result
-
-        setSearchStatus(status)
-
-        if (status === 'SUCCESS') {
-          clearInterval(pollInterval)
-          setSearchingJobs(false)
-          setSearchTaskId(null)
-          setSearchStatus(null)
-
-          alert(`Successfully found ${result.jobs_found} jobs! (${result.jobs_saved} new) | Scraper: ${result.scraper_mode} | Top Match: ${result.top_match_score || 'N/A'}%`)
-
-          // Reload scraped jobs
-          await loadScrapedJobs(resumeId)
-        } else if (status === 'FAILURE') {
-          clearInterval(pollInterval)
-          setSearchingJobs(false)
-          setSearchTaskId(null)
-          setSearchStatus(null)
-
-          const errorMsg = result?.error || result || 'Unknown error'
-          alert(`Job search failed: ${errorMsg}`)
-        } else if (attempts >= maxAttempts) {
-          clearInterval(pollInterval)
-          setSearchingJobs(false)
-          setSearchTaskId(null)
-          setSearchStatus(null)
-
-          alert('Job search timed out. Please try again.')
-        }
-
-        attempts++
-      } catch (error) {
-        console.error('Failed to poll status:', error)
-        clearInterval(pollInterval)
-        setSearchingJobs(false)
-        setSearchTaskId(null)
-        setSearchStatus(null)
-      }
-    }
-
-    const pollInterval = setInterval(poll, 5000) // Poll every 5 seconds
-    poll() // Initial poll
-  }
-
   const handleSearchJobs = async (resumeId) => {
     try {
       setSearchingJobs(true)
-      setSearchStatus('PENDING')
 
-      const response = await jobSearch.startJobSearch({
+      const response = await jobSearch.searchJobs({
         resume_id: resumeId,
-        location: searchLocation || null,
+        location: searchLocation || 'Remote',
         remote_only: searchRemoteOnly,
-        max_results: 50  // Reduced to 50 to avoid timeout (balance of speed vs quantity)
+        max_results: 50
       })
 
-      const taskId = response.data.task_id
-      setSearchTaskId(taskId)
+      setSearchingJobs(false)
+      alert(`Successfully found ${response.data.jobs_found || 0} jobs!`)
 
-      // Start polling
-      pollSearchStatus(taskId, resumeId)
+      // Reload scraped jobs
+      await loadScrapedJobs(resumeId)
     } catch (error) {
       console.error('Job search failed:', error)
-      alert(error.response?.data?.detail || 'Failed to start job search. Please try again.')
+      alert(error.response?.data?.detail || 'Failed to search jobs. Please try again.')
       setSearchingJobs(false)
-      setSearchStatus(null)
     }
   }
 

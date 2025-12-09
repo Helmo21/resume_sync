@@ -52,11 +52,6 @@ services:
     volumes:
       - ./backend:/app
       - ./teamplate:/app/teamplate
-      - ./linkedin_scraper_final.py:/app/legacy/linkedin_scraper_final.py
-      - ./linkedin_api_scraper.py:/app/legacy/linkedin_api_scraper.py
-      - ./job_scraper.py:/app/legacy/job_scraper.py
-      - ./openai_generator.py:/app/legacy/openai_generator.py
-      - ./pdf_generator.py:/app/legacy/pdf_generator.py
     depends_on:
       db:
         condition: service_healthy
@@ -65,30 +60,6 @@ services:
     networks:
       - resumesync-network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  # Celery Worker (Background Tasks for AI Matching)
-  celery_worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: resumesync-celery-worker
-    env_file:
-      - ./backend/.env
-    environment:
-      DATABASE_URL: postgresql://resumesync:resumesync@db:5432/resumesync
-      DATABASE_URL_ASYNC: postgresql+asyncpg://resumesync:resumesync@db:5432/resumesync
-      REDIS_URL: redis://redis:6379/0
-      DISPLAY: ":99"  # Xvfb display
-    volumes:
-      - ./backend:/app
-      - ./teamplate:/app/teamplate
-    depends_on:
-      - db
-      - redis
-    networks:
-      - resumesync-network
-    command: >
-      sh -c "Xvfb :99 -screen 0 1920x1080x24 & celery -A app.celery_app worker --loglevel=info"
 
   # Frontend (React)
   frontend:

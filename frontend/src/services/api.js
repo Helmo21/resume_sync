@@ -71,15 +71,8 @@ export const uploadedResumes = {
 
 // Job Search (LinkedIn scraping)
 export const jobSearch = {
-  // V1 (Legacy - synchronous, blocking)
   searchJobs: (data) => api.post('/job-search/search', data),
-
-  // V2 (New - async with AI matching)
-  startJobSearch: (data) => api.post('/jobs/search', data), // Returns task_id
-  getSearchStatus: (taskId) => api.get(`/jobs/search/status/${taskId}`), // Poll for status
-  getMatchedJobs: (resumeId, params = {}) => api.get(`/jobs/resume/${resumeId}/jobs`, { params }), // Get matched jobs with scores
-  getScrapedJobs: (resumeId) => api.get(`/job-search/resume/${resumeId}/jobs`), // Legacy
-  getServiceAccountStats: () => api.get('/jobs/service-accounts/stats'), // Check account health
+  getScrapedJobs: (resumeId) => api.get(`/job-search/resume/${resumeId}/jobs`),
 }
 
 export default api

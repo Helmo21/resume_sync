@@ -33,7 +33,7 @@ class ScraperMode(Enum):
 
 class LinkedInJobScraperV2:
     """
-    Advanced LinkedIn Job Scraper with automatic fallback
+    Advanced LinkedIn Job Scraper with automatic fallback and cookie persistence
     """
 
     def __init__(self, headless: bool = True, max_jobs: int = 100):
@@ -46,31 +46,41 @@ class LinkedInJobScraperV2:
         email: str,
         password: str,
         job_title: str,
-        location: str
-    ) -> tuple[List[Dict], ScraperMode]:
+        location: str,
+        cookies: Optional[Dict] = None
+    ) -> tuple[List[Dict], ScraperMode, Optional[Dict]]:
         """
-        Scrape jobs with automatic fallback
+        Scrape jobs with automatic fallback and cookie persistence
+
+        Args:
+            email: LinkedIn account email
+            password: LinkedIn account password
+            job_title: Job title to search for
+            location: Location to search in
+            cookies: Existing cookies to reuse (avoids re-login)
 
         Returns:
-            (jobs_list, mode_used)
+            (jobs_list, mode_used, updated_cookies)
         """
         # Try Camoufox first (more reliable, anti-detection)
         try:
             print("🦊 Attempting scrape with Camoufox (anti-detection mode)...")
-            jobs = await self._scrape_with_camoufox(email, password, job_title, location)
+            if cookies:
+                print("   🍪 Using saved cookies (no login needed)")
+            jobs, new_cookies = await self._scrape_with_camoufox(email, password, job_title, location, cookies)
             print(f"✅ Camoufox succeeded! Scraped {len(jobs)} jobs")
             self.mode = ScraperMode.CAMOUFOX
-            return jobs, ScraperMode.CAMOUFOX
+            return jobs, ScraperMode.CAMOUFOX, new_cookies
         except Exception as e:
             print(f"⚠️  Camoufox failed: {str(e)}")
             print("🔄 Falling back to Selenium...")
 
             # Fallback to Selenium
             try:
-                jobs = await self._scrape_with_selenium(email, password, job_title, location)
+                jobs, new_cookies = await self._scrape_with_selenium(email, password, job_title, location, cookies)
                 print(f"✅ Selenium succeeded! Scraped {len(jobs)} jobs")
                 self.mode = ScraperMode.SELENIUM
-                return jobs, ScraperMode.SELENIUM
+                return jobs, ScraperMode.SELENIUM, new_cookies
             except Exception as selenium_error:
                 print(f"❌ Selenium also failed: {str(selenium_error)}")
                 raise Exception(
@@ -82,20 +92,54 @@ class LinkedInJobScraperV2:
         email: str,
         password: str,
         job_title: str,
-        location: str
-    ) -> List[Dict]:
-        """Scrape using Camoufox (anti-detection browser)"""
+        location: str,
+        cookies: Optional[Dict] = None
+    ) -> tuple[List[Dict], Optional[Dict]]:
+        """Scrape using Camoufox (anti-detection browser) with cookie persistence"""
         jobs_data = []
 
         async with AsyncCamoufox(
             headless=self.headless,
             humanize=True,  # Human-like cursor movements
             os='windows',   # Simulate Windows
+            # Additional stealth features
+            geoip=True,     # Use realistic geolocation
+            fonts=True,     # Load real system fonts
+            exclude_addons=['default'],  # Don't load default addons
+            block_images=False,  # Load images (more realistic)
+            block_webrtc=True,   # Block WebRTC leaks
         ) as browser:
             page = await browser.new_page()
 
-            # Login
-            await self._camoufox_login(page, email, password)
+            # Load cookies if available
+            if cookies:
+                await page.goto("https://www.linkedin.com")
+                await self._load_cookies_camoufox(page, cookies)
+                await asyncio.sleep(2)
+
+                # Verify we're logged in
+                await page.goto("https://www.linkedin.com/feed/")
+                await asyncio.sleep(3)
+                current_url = page.url
+                if 'feed' in current_url or 'mynetwork' in current_url:
+                    print("   ✅ Logged in using cookies")
+                else:
+                    print("   ⚠️  Cookies expired, logging in fresh...")
+                    cookies = None  # Force fresh login
+
+            # Login if no cookies or cookies expired
+            if not cookies:
+                await self._camoufox_login(page, email, password)
+                # Save cookies after login
+                cookies = await self._save_cookies_camoufox(page)
+
+                # Human-like behavior: "Browse" a bit after login
+                print("   ✅ Login successful, simulating human browsing...")
+                await page.goto("https://www.linkedin.com/feed/")
+                await asyncio.sleep(random.uniform(2.0, 4.0))
+                # Scroll a bit (humans do this)
+                await page.evaluate("window.scrollTo(0, 500)")
+                await asyncio.sleep(random.uniform(1.0, 2.0))
 
             # Build search URL
             job_title_encoded = job_title.replace(" ", "%20")
@@ -155,30 +199,67 @@ class LinkedInJobScraperV2:
                 page_num += 1
                 await asyncio.sleep(random.uniform(3.0, 5.0))
 
-        return jobs_data
+        return jobs_data, cookies
+
+    async def _load_cookies_camoufox(self, page, cookies: Dict):
+        """Load cookies into Camoufox page"""
+        try:
+            if isinstance(cookies, dict) and 'cookies' in cookies:
+                cookies_list = cookies['cookies']
+            else:
+                cookies_list = cookies
+
+            for cookie in cookies_list:
+                await page.context.add_cookies([cookie])
+        except Exception as e:
+            print(f"   ⚠️  Error loading cookies: {e}")
+
+    async def _save_cookies_camoufox(self, page) -> Dict:
+        """Save cookies from Camoufox page"""
+        try:
+            cookies = await page.context.cookies()
+            return {'cookies': cookies}
+        except Exception as e:
+            print(f"   ⚠️  Error saving cookies: {e}")
+            return None
 
     async def _camoufox_login(self, page, email: str, password: str):
-        """Login to LinkedIn with Camoufox"""
-        print("🔐 Logging in with Camoufox...")
-        await page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
-        await asyncio.sleep(2)
+        """Login to LinkedIn with Camoufox - HUMAN-LIKE behavior"""
+        print("🔐 Logging in with Camoufox (human-like typing)...")
 
-        # Fill credentials
+        # Navigate with realistic timing
+        await page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
+        await asyncio.sleep(random.uniform(2.0, 3.5))  # Human-like pause to "read" page
+
+        # Click and type email (human-like)
         email_input = await page.query_selector('input#username')
         if email_input:
-            await email_input.fill(email)
-            await asyncio.sleep(0.5)
+            await email_input.click()  # Click first (humans do this)
+            await asyncio.sleep(random.uniform(0.3, 0.7))  # Pause before typing
 
+            # Type character by character with random delays (like a human)
+            await email_input.type(email, delay=random.uniform(80, 150))
+            await asyncio.sleep(random.uniform(0.5, 1.2))  # Pause after typing
+
+        # Click and type password (human-like)
         password_input = await page.query_selector('input#password')
         if password_input:
-            await password_input.fill(password)
-            await asyncio.sleep(0.5)
+            await password_input.click()
+            await asyncio.sleep(random.uniform(0.3, 0.7))
 
-        # Submit
+            # Type password with realistic speed
+            await password_input.type(password, delay=random.uniform(90, 160))
+            await asyncio.sleep(random.uniform(0.8, 1.5))  # Pause before submitting
+
+        # Submit with human-like behavior
         login_button = await page.query_selector('button[type="submit"]')
         if login_button:
+            # Move mouse to button area (humanize feature will handle this)
+            await login_button.hover()
+            await asyncio.sleep(random.uniform(0.3, 0.6))
+
             await login_button.click()
-            await asyncio.sleep(5)
+            await asyncio.sleep(random.uniform(4.0, 6.0))  # Wait for page load
 
         # Check for checkpoint
         current_url = page.url
@@ -393,27 +474,29 @@ class LinkedInJobScraperV2:
         email: str,
         password: str,
         job_title: str,
-        location: str
-    ) -> List[Dict]:
-        """Scrape using Selenium (fallback)"""
+        location: str,
+        cookies: Optional[Dict] = None
+    ) -> tuple[List[Dict], Optional[Dict]]:
+        """Scrape using Selenium (fallback) with cookie persistence"""
         print("🌐 Starting Selenium scraper...")
 
         # Run in asyncio executor to avoid blocking
         loop = asyncio.get_event_loop()
-        jobs = await loop.run_in_executor(
+        jobs, new_cookies = await loop.run_in_executor(
             None,
             self._selenium_sync_scrape,
-            email, password, job_title, location
+            email, password, job_title, location, cookies
         )
-        return jobs
+        return jobs, new_cookies
 
     def _selenium_sync_scrape(
         self,
         email: str,
         password: str,
         job_title: str,
-        location: str
-    ) -> List[Dict]:
+        location: str,
+        cookies: Optional[Dict] = None
+    ) -> tuple[List[Dict], Optional[Dict]]:
         """Synchronous Selenium scrape (runs in executor)"""
         chrome_options = ChromeOptions()
 
@@ -429,18 +512,48 @@ class LinkedInJobScraperV2:
         driver.implicitly_wait(10)
 
         try:
-            # Login
-            driver.get('https://www.linkedin.com/login')
-            time.sleep(2)
+            # Load cookies if available
+            if cookies:
+                driver.get("https://www.linkedin.com")
+                time.sleep(2)
 
-            driver.find_element(By.ID, 'username').send_keys(email)
-            driver.find_element(By.ID, 'password').send_keys(password)
-            driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
-            time.sleep(5)
+                # Load cookies
+                if isinstance(cookies, dict) and 'cookies' in cookies:
+                    cookies_list = cookies['cookies']
+                else:
+                    cookies_list = cookies
 
-            # Check login
-            if 'checkpoint' in driver.current_url or 'challenge' in driver.current_url:
-                raise Exception("LinkedIn security challenge")
+                for cookie in cookies_list:
+                    try:
+                        driver.add_cookie(cookie)
+                    except:
+                        pass
+
+                # Verify login
+                driver.get("https://www.linkedin.com/feed/")
+                time.sleep(3)
+                if 'feed' in driver.current_url or 'mynetwork' in driver.current_url:
+                    print("   ✅ Logged in using cookies")
+                else:
+                    print("   ⚠️  Cookies expired, logging in fresh...")
+                    cookies = None  # Force fresh login
+
+            # Login if no cookies or cookies expired
+            if not cookies:
+                driver.get('https://www.linkedin.com/login')
+                time.sleep(2)
+
+                driver.find_element(By.ID, 'username').send_keys(email)
+                driver.find_element(By.ID, 'password').send_keys(password)
+                driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
+                time.sleep(5)
+
+                # Check login
+                if 'checkpoint' in driver.current_url or 'challenge' in driver.current_url:
+                    raise Exception("LinkedIn security challenge")
+
+                # Save cookies after successful login
+                cookies = {'cookies': driver.get_cookies()}
 
             # Search
             search_url = f'https://www.linkedin.com/jobs/search/?keywords={job_title}&location={location}&f_AL=true'
@@ -473,7 +586,7 @@ class LinkedInJobScraperV2:
                     print(f"  ✗ Error: {str(e)}")
                     continue
 
-            return jobs_data
+            return jobs_data, cookies
 
         finally:
             driver.quit()

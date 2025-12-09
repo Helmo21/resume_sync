@@ -1,5 +1,5 @@
-from sqlalchemy import Column, String, Integer, DateTime, Boolean
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Integer, DateTime, Boolean, Text
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime
 import uuid
 
@@ -15,6 +15,7 @@ class LinkedInServiceAccount(Base):
     - Scrape job postings (Job Search feature)
 
     Credentials are encrypted before storage.
+    Cookie persistence reduces login frequency and avoids security challenges.
     """
     __tablename__ = "linkedin_service_accounts"
 
@@ -26,3 +27,8 @@ class LinkedInServiceAccount(Base):
     last_used_at = Column(DateTime, nullable=True)
     requests_count_today = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Cookie persistence (NEW)
+    cookies = Column(JSONB, nullable=True)  # Stored cookies for session persistence
+    cookies_updated_at = Column(DateTime, nullable=True)  # When cookies were last saved
+    cookies_expiry = Column(DateTime, nullable=True)  # When cookies expire (14 days from update)

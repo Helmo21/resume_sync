@@ -125,6 +125,54 @@ class ServiceAccountManager:
             raise Exception(f"Failed to decrypt service account credentials: {str(e)}")
 
     @staticmethod
+    def get_available_account_with_cookies(db: Session) -> Tuple[str, str, 'LinkedInServiceAccount']:
+        """
+        Get credentials and account object for cookie persistence.
+
+        Returns:
+            Tuple of (email, password, account_object)
+        """
+        now = datetime.utcnow()
+        cooldown_threshold = now - timedelta(minutes=ServiceAccountManager.COOLDOWN_MINUTES)
+
+        # Query available accounts (same logic as get_available_account)
+        available_accounts = db.query(LinkedInServiceAccount).filter(
+            and_(
+                LinkedInServiceAccount.is_active == True,
+                or_(
+                    LinkedInServiceAccount.requests_count_today < ServiceAccountManager.DAILY_REQUEST_LIMIT,
+                    LinkedInServiceAccount.requests_count_today == None
+                ),
+                or_(
+                    LinkedInServiceAccount.last_used_at < cooldown_threshold,
+                    LinkedInServiceAccount.last_used_at == None
+                )
+            )
+        ).order_by(
+            LinkedInServiceAccount.is_premium.desc(),
+            LinkedInServiceAccount.last_used_at.asc().nullsfirst()
+        ).all()
+
+        if not available_accounts:
+            raise Exception("No service accounts available")
+
+        account = available_accounts[0]
+
+        # Update usage stats
+        account.last_used_at = now
+        account.requests_count_today = (account.requests_count_today or 0) + 1
+        db.commit()
+
+        # Decrypt credentials
+        encryption_service = get_encryption_service()
+        try:
+            email = encryption_service.decrypt(account.email)
+            password = encryption_service.decrypt(account.password)
+            return (email, password, account)
+        except Exception as e:
+            raise Exception(f"Failed to decrypt service account credentials: {str(e)}")
+
+    @staticmethod
     def mark_account_failed(db: Session, email: str):
         """
         Mark an account as temporarily failed (triggers cooldown).

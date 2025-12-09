@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from .core.config import settings
-from .api import auth, resumes, profile, jobs, uploaded_resumes, job_search, job_search_v2
+from .api import auth, resumes, profile, jobs, uploaded_resumes, job_search
 from .core.database import SessionLocal
 from .core.service_account_loader import load_service_accounts_from_env, verify_service_accounts
 import os
@@ -66,8 +66,7 @@ app.include_router(profile.router, prefix="/api/profile", tags=["Profile"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(resumes.router, prefix="/api/resumes", tags=["Resumes"])
 app.include_router(uploaded_resumes.router, prefix="/api/uploaded-resumes", tags=["Uploaded Resumes"])
-app.include_router(job_search.router, prefix="/api/job-search", tags=["Job Search (Legacy)"])
-app.include_router(job_search_v2.router, prefix="/api/jobs", tags=["Job Search V2"])
+app.include_router(job_search.router, prefix="/api/job-search", tags=["Job Search"])
 
 
 @app.get("/")

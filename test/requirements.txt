@@ -1,2 +1,0 @@
-camoufox==0.4.3
-python-dotenv==1.0.0
